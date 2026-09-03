@@ -1,13 +1,18 @@
 spring:
   application:
+    # Logical service name exposed through Spring's application environment.
     name: inventory-service
   datasource:
+    # Local defaults support development; environment variables provide deployment-specific secrets.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/inventory}
     username: ${DB_USERNAME:inventory}
     password: ${DB_PASSWORD:inventory}
   jpa:
+    # Prevents web requests from triggering database access after the adapter transaction has ended.
     open-in-view: false
     hibernate:
+      # Flyway owns DDL; Hibernate only verifies that entity mappings match the migrated schema.
       ddl-auto: validate
   flyway:
+    # Applies versioned migrations before JPA initializes and validates its mappings.
     enabled: true
