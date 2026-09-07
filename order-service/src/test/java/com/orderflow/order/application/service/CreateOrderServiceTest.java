@@ -27,13 +27,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** Unit test for creation orchestration with every outbound dependency mocked. */
 @ExtendWith(MockitoExtension.class)
 class CreateOrderServiceTest {
+    /** Captures persistence interaction without a database. */
     @Mock OrderRepository repository;
+    /** Captures emitted domain facts without messaging infrastructure. */
     @Mock IntegrationMessagePublisher publisher;
+    /** Provides deterministic application time. */
     @Mock ClockProvider clock;
+    /** Provides a deterministic identity. */
     @Mock OrderIdGenerator idGenerator;
 
+    /** Verifies mapping, aggregate behavior, persistence, result, and event publication together. */
     @Test
     void shouldCreatePersistAndPublishInventoryReservation() {
         UUID orderUuid = UUID.randomUUID();

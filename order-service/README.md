@@ -2,6 +2,10 @@
 
 The Order bounded context owns order creation, pricing, lifecycle rules, and the state needed to continue the future distributed order saga after a restart.
 
+For a class-by-class walkthrough, request flow, persistence explanation, error mapping, and test map,
+see [the detailed code guide](docs/code-guide.md). Production classes and methods also contain
+Javadoc next to their implementation so the design intent remains visible while navigating code.
+
 ## Domain model
 
 `Order` is the aggregate root. It contains immutable `OrderLine` values and uses explicit domain types for order, customer, product, quantity, money, and payment-method identities. The aggregate calculates its own EUR total and exposes behavior-oriented transitions instead of generic state setters.
@@ -89,6 +93,20 @@ The code follows a hexagonal layout:
 - `adapter/out/messaging`: the current no-op local publisher.
 
 PostgreSQL schema changes are managed by Flyway. Hibernate validates the schema and does not create it. Orders persist their lifecycle status, timestamps, calculated total, currency, lines, and optimistic-lock version.
+
+## Code documentation
+
+The [code guide](docs/code-guide.md) explains the end-to-end request paths, every production class,
+domain transitions, persistence mapping, error flow, and test responsibilities. Package-level Javadoc
+describes each architectural area, while class and method Javadoc stays beside the implementation.
+
+Generate the browsable API documentation with:
+
+```shell
+./gradlew javadoc
+```
+
+The generated entry point is `build/docs/javadoc/index.html`.
 
 ## Running locally
 

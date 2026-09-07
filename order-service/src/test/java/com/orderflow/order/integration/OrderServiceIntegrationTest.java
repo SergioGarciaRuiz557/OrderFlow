@@ -34,13 +34,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Full-stack integration specification using a disposable real PostgreSQL database.
+ *
+ * <p>The class verifies the same Flyway migration and Hibernate validation used in production. It is
+ * disabled rather than failed when Docker is unavailable.</p>
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 class OrderServiceIntegrationTest {
+    /** Shared PostgreSQL container started once for this integration-test class. */
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
 
+    /**
+     * Overrides production datasource properties with the container's random connection details.
+     *
+     * @param registry Spring test property registry
+     */
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
@@ -48,9 +60,12 @@ class OrderServiceIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
+    /** Real hexagonal repository adapter under test. */
     @Autowired OrderRepository repository;
+    /** HTTP test client that invokes the complete Spring MVC stack without an external server. */
     @Autowired MockMvc mockMvc;
 
+    /** Verifies JPA mapping, line persistence, total validation, status, and event-free rehydration. */
     @Test
     @Transactional
     void shouldPersistAndRehydrateAggregate() {
@@ -69,6 +84,7 @@ class OrderServiceIntegrationTest {
         assertThat(restored.pullDomainEvents()).isEmpty();
     }
 
+    /** Verifies POST and GET through validation, application, Flyway-created tables, and JPA. */
     @Test
     void shouldCreateAndRetrieveOrderThroughRestApi() throws Exception {
         String body = """
@@ -95,6 +111,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.currency").value("EUR"));
     }
 
+    /** Verifies invalid JSON values use the stable structured API error contract. */
     @Test
     void shouldReturnStructuredValidationError() throws Exception {
         mockMvc.perform(post("/api/orders")

@@ -1,16 +1,23 @@
 spring:
+  # Logical application name used in logs and Spring infrastructure.
   application:
     name: order-service
+  # Explicit local connection keeps this service independent from Docker Compose auto-discovery.
+  # Environment variables allow deployment platforms to supply managed PostgreSQL credentials.
   datasource:
     url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5433/orderflow_orders}
     username: ${ORDER_DB_USERNAME:orderflow}
     password: ${ORDER_DB_PASSWORD:orderflow}
   jpa:
     hibernate:
+      # Flyway owns schema changes; Hibernate only verifies entity/schema compatibility.
       ddl-auto: validate
+    # Prevents lazy database access from leaking beyond the transactional application boundary.
     open-in-view: false
   flyway:
+    # Applies versioned classpath migrations before Hibernate validates its mappings.
     enabled: true
 
 server:
+  # Order uses a dedicated HTTP port by default and remains configurable in deployment.
   port: ${ORDER_SERVICE_PORT:8081}

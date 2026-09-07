@@ -11,18 +11,35 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+/** Handles rejected payment authorization and begins inventory compensation. */
 @Service
 public class HandlePaymentRejectedService implements HandlePaymentRejectedUseCase {
+    /** Aggregate persistence port. */
     private final OrderRepository repository;
+    /** Domain-event publication port. */
     private final IntegrationMessagePublisher publisher;
+    /** Business-time provider. */
     private final ClockProvider clock;
 
+    /**
+     * Creates the rejected-payment callback service.
+     *
+     * @param repository aggregate persistence port
+     * @param publisher domain-event publication port
+     * @param clock business-time port
+     */
     public HandlePaymentRejectedService(OrderRepository repository, IntegrationMessagePublisher publisher, ClockProvider clock) {
         this.repository = repository;
         this.publisher = publisher;
         this.clock = clock;
     }
 
+    /**
+     * Loads the order, records rejection and release intent, then persists and publishes.
+     *
+     * @param orderId order referenced by the payment result
+     * @param reason payment rejection explanation
+     */
     @Override
     @Transactional
     public void handle(UUID orderId, String reason) {

@@ -13,9 +13,15 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Fast, framework-free specification of Order aggregate invariants and lifecycle behavior.
+ * Each test interacts with the same public behavior that application services use.
+ */
 class OrderTest {
+    /** Fixed time keeps state and event assertions deterministic. */
     private static final Instant NOW = Instant.parse("2026-09-07T10:00:00Z");
 
+    /** Verifies initial status and domain-owned total calculation. */
     @Test
     void shouldCreateValidOrder() {
         Order order = newOrder(List.of(line("PRODUCT-001", 2, "59.99")));
@@ -24,6 +30,7 @@ class OrderTest {
         assertThat(order.total()).isEqualTo(Money.eur(new BigDecimal("119.98")));
     }
 
+    /** Verifies that aggregate construction cannot bypass the non-empty-line invariant. */
     @Test
     void shouldRejectEmptyOrder() {
         assertThatThrownBy(() -> newOrder(List.of()))
@@ -31,6 +38,7 @@ class OrderTest {
                 .hasMessageContaining("at least one line");
     }
 
+    /** Verifies value objects reject zero quantity and negative money independently of REST. */
     @Test
     void shouldRejectInvalidQuantityAndNegativePrice() {
         assertThatThrownBy(() -> new Quantity(0))
@@ -39,6 +47,7 @@ class OrderTest {
                 .isInstanceOf(DomainInvariantViolationException.class);
     }
 
+    /** Verifies total calculation across multiple prices and quantities. */
     @Test
     void shouldCalculateOrderTotal() {
         Order order = newOrder(List.of(line("A", 2, "10.25"), line("B", 3, "4.50")));
@@ -46,6 +55,7 @@ class OrderTest {
         assertThat(order.total().amount()).isEqualByComparingTo("34.00");
     }
 
+    /** Verifies saga ordering forbids payment before confirmed inventory reservation. */
     @Test
     void shouldNotAuthorizePaymentBeforeInventoryReservation() {
         Order order = newOrder(List.of(line("A", 1, "10.00")));
@@ -55,6 +65,7 @@ class OrderTest {
                 .hasMessageContaining("before inventory reservation");
     }
 
+    /** Verifies successful payment produces the terminal confirmation state and event. */
     @Test
     void shouldConfirmOrderAfterPaymentAuthorization() {
         Order order = orderAwaitingPayment();
@@ -66,6 +77,7 @@ class OrderTest {
         assertThat(order.pullDomainEvents()).anyMatch(OrderConfirmed.class::isInstance);
     }
 
+    /** Verifies the pre-confirmation cancellation path cannot cancel a confirmed order. */
     @Test
     void shouldNotCancelConfirmedOrder() {
         Order order = orderAwaitingPayment();
@@ -76,6 +88,7 @@ class OrderTest {
                 .hasMessageContaining("confirmed order");
     }
 
+    /** Verifies inventory rejection directly terminates the order as cancelled. */
     @Test
     void shouldCancelOrderWhenInventoryIsRejected() {
         Order order = newOrder(List.of(line("A", 1, "10.00")));
@@ -86,6 +99,7 @@ class OrderTest {
         assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
     }
 
+    /** Verifies payment rejection begins compensation by requesting inventory release. */
     @Test
     void shouldRequestInventoryReleaseWhenPaymentIsRejected() {
         Order order = orderAwaitingPayment();
@@ -97,6 +111,7 @@ class OrderTest {
         assertThat(order.pullDomainEvents()).anyMatch(InventoryReleaseRequested.class::isInstance);
     }
 
+    /** Verifies replaying an already-applied successful callback is a side-effect-free no-op. */
     @Test
     void shouldSafelyIgnoreDuplicateSuccessfulTransition() {
         Order order = orderAwaitingPayment();
@@ -109,6 +124,7 @@ class OrderTest {
         assertThat(order.pullDomainEvents()).isEmpty();
     }
 
+    /** @return valid aggregate advanced to {@link OrderStatus#PAYMENT_PENDING} */
     private Order orderAwaitingPayment() {
         Order order = newOrder(List.of(line("A", 1, "10.00")));
         order.requestInventoryReservation(NOW.plusSeconds(1));
@@ -117,11 +133,13 @@ class OrderTest {
         return order;
     }
 
+    /** Creates a valid test aggregate with random identities and a fixed time. */
     private Order newOrder(List<OrderLine> lines) {
         return Order.create(new OrderId(UUID.randomUUID()), new CustomerId(UUID.randomUUID()), lines,
                 new PaymentMethodId("pm-test"), NOW);
     }
 
+    /** Creates one concise, fully validated test line. */
     private OrderLine line(String product, int quantity, String price) {
         return new OrderLine(new ProductId(product), new Quantity(quantity), Money.eur(new BigDecimal(price)));
     }

@@ -27,12 +27,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** Unit test for successful inventory-result orchestration without Spring. */
 @ExtendWith(MockitoExtension.class)
 class HandleInventoryReservedServiceTest {
+    /** Supplies and captures the aggregate. */
     @Mock OrderRepository repository;
+    /** Captures events without a transport. */
     @Mock IntegrationMessagePublisher publisher;
+    /** Supplies deterministic callback processing time. */
     @Mock ClockProvider clock;
 
+    /** Verifies the handler advances reservation success through to payment pending and saves it. */
     @Test
     void shouldMoveOrderToPaymentPending() {
         UUID id = UUID.randomUUID();
