@@ -2,7 +2,7 @@
 .kotlin/
 build/
 **/build/
-out/
+/out/
 .idea/
 *.iml
 .vscode/
