@@ -62,7 +62,15 @@ GET /api/inventory/{productId}
 
 ## Running
 
-The default connection is `jdbc:postgresql://localhost:5432/inventory` with username and password `inventory`. Override it with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`.
+Local execution requires Docker. Spring Boot uses `inventory-service/compose.yaml` to start
+PostgreSQL automatically before the application context is created and stops the container when the
+application exits. The root `compose.yaml` includes that file so discovery also works when an IDE
+launches the service with the repository root as its working directory. The database is persisted in
+the `inventory-postgres-data` Docker volume.
+
+The default connection is `jdbc:postgresql://localhost:5432/inventory` with username and password
+`inventory`. Override it with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` when connecting to an
+externally managed database.
 
 ```shell
 ./gradlew test
