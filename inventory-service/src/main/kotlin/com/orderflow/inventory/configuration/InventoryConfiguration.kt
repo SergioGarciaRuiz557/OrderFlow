@@ -4,6 +4,7 @@ import com.orderflow.inventory.application.port.`out`.ClockProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.time.Clock
+import java.time.temporal.ChronoUnit
 
 /**
  * Dependency configuration for infrastructure-independent time handling.
@@ -17,10 +18,16 @@ class InventoryConfiguration {
      * Adapts Java's [Clock] to the application's small outbound time port.
      *
      * @param clock configured clock implementation.
-     * @return provider whose `now` operation delegates to [Clock.instant].
+     * PostgreSQL stores timestamps with microsecond precision, while [java.time.Instant] can carry
+     * nanoseconds. Normalizing here ensures the value returned by a use case is identical to the
+     * value reconstructed after a persistence round trip on every operating system.
+     *
+     * @return provider whose `now` operation returns the current instant at microsecond precision.
      */
     @Bean
-    fun clockProvider(clock: Clock): ClockProvider = ClockProvider(clock::instant)
+    fun clockProvider(clock: Clock): ClockProvider = ClockProvider {
+        clock.instant().truncatedTo(ChronoUnit.MICROS)
+    }
 
     /**
      * Provides the production clock in UTC.
