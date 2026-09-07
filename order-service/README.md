@@ -96,16 +96,31 @@ Provide a PostgreSQL database and optionally override these defaults:
 
 | Variable | Default |
 | --- | --- |
-| `ORDER_DB_URL` | `jdbc:postgresql://localhost:5432/orderflow_orders` |
+| `ORDER_DB_URL` | `jdbc:postgresql://localhost:5433/orderflow_orders` |
 | `ORDER_DB_USERNAME` | `orderflow` |
 | `ORDER_DB_PASSWORD` | `orderflow` |
 | `ORDER_SERVICE_PORT` | `8081` |
 
-Then run:
+For local development, `order-service/compose.yaml` defines the `order-postgres` service with a
+healthcheck. Database files survive container replacement in the named `order-postgres-data`
+volume. Port `5433` is used on the host so Inventory PostgreSQL can continue to use `5432`.
+
+Start the database first, then the application:
 
 ```shell
+docker compose up -d --wait order-postgres
 ./gradlew bootRun
 ```
+
+The database can also be managed independently:
+
+```shell
+docker compose up -d --wait order-postgres
+docker compose down
+```
+
+Run those commands from `order-service/`. Keeping each service's Compose lifecycle independent
+prevents Spring Boot from discovering two competing PostgreSQL connection definitions.
 
 ## Testing
 
