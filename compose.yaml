@@ -1,0 +1,6 @@
+# Allows Spring Boot to discover the inventory infrastructure when the application is launched
+# with the repository root as its working directory (for example, from the IDE).
+name: orderflow-inventory
+
+include:
+  - path: inventory-service/compose.yaml

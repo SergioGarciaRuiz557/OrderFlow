@@ -39,6 +39,10 @@ dependencies {
     // The JDBC driver is needed only when the application connects to PostgreSQL at runtime.
     runtimeOnly("org.postgresql:postgresql")
 
+    // During local development, Spring Boot starts the PostgreSQL service declared in compose.yaml
+    // before creating the application context and stops it when the application exits.
+    developmentOnly("org.springframework.boot:spring-boot-docker-compose")
+
     // JUnit 5, Spring test facilities, Kotlin assertions, and Kotlin-friendly port mocking.
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(kotlin("test-junit5"))
