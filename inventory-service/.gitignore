@@ -1,0 +1,8 @@
+# The repository-level `out/` rule is intended for build output, but these are
+# source packages in the established hexagonal architecture.
+!src/main/kotlin/com/orderflow/inventory/adapter/out/
+!src/main/kotlin/com/orderflow/inventory/adapter/out/**
+!src/main/kotlin/com/orderflow/inventory/application/port/out/
+!src/main/kotlin/com/orderflow/inventory/application/port/out/**
+!src/test/kotlin/com/orderflow/inventory/adapter/out/
+!src/test/kotlin/com/orderflow/inventory/adapter/out/**
