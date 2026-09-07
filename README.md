@@ -31,3 +31,9 @@ Each service owns its Gradle build and wrapper. Run its tests independently from
 ./gradlew clean test
 ```
 
+## Continuous integration
+
+GitHub Actions compiles and tests all four services after every push and on
+every pull request targeting `main`. See
+[the continuous integration guide](docs/continuous-integration.md) for the
+workflow behavior and the required `main` branch protection settings.
