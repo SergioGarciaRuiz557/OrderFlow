@@ -11,7 +11,7 @@ OrderFlow is a distributed backend project intended to demonstrate professional 
 | `payment-service` | Kotlin | Payment authorization |
 | `notification-service` | Kotlin | Order notifications |
 
-The repository currently contains only the initial architectural bootstrap. Business logic and infrastructure will be introduced incrementally in future commits.
+The Order and Inventory bounded contexts include their first functional implementations. Payment and Notification remain architectural bootstraps and will be introduced incrementally in future commits.
 
 ## Architecture
 
