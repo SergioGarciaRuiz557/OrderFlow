@@ -1,4 +1,16 @@
 spring:
   application:
     name: order-service
+  datasource:
+    url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5432/orderflow_orders}
+    username: ${ORDER_DB_USERNAME:orderflow}
+    password: ${ORDER_DB_PASSWORD:orderflow}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
 
+server:
+  port: ${ORDER_SERVICE_PORT:8081}
