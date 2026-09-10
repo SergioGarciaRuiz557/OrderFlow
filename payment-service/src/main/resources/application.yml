@@ -1,4 +1,18 @@
 spring:
   application:
+    # Logical service name used by Spring diagnostics and future observability integrations.
     name: payment-service
-
+  datasource:
+    # Local PostgreSQL defaults; deployment environments override values without changing the artifact.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/payment}
+    username: ${DB_USERNAME:payment}
+    password: ${DB_PASSWORD:payment}
+  jpa:
+    # Prevents accidental lazy database access outside adapter-managed transactions.
+    open-in-view: false
+    hibernate:
+      # Flyway owns all schema changes; Hibernate only verifies mappings against the migrated schema.
+      ddl-auto: validate
+  flyway:
+    # Applies versioned payment migrations before Hibernate validates its entity mapping.
+    enabled: true
