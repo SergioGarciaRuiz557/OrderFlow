@@ -21,9 +21,9 @@ dependencies {
     implementation(kotlin("reflect"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(kotlin("test-junit5"))
+    testImplementation("io.mockk:mockk:1.14.6")
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
 }
-
