@@ -1,4 +1,13 @@
 spring:
   application:
     name: payment-service
-
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/payment}
+    username: ${DB_USERNAME:payment}
+    password: ${DB_PASSWORD:payment}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
