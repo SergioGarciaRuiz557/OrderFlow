@@ -12,9 +12,17 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 
+/**
+ * Standalone contract tests for the deterministic fake gateway adapter.
+ *
+ * These tests prove the fake distinguishes provider business outcomes from technical failures and
+ * remains deterministic without requiring Spring, PostgreSQL, or external network access.
+ */
 class FakePaymentGatewayTest {
+    /** Stateless adapter under test, constructed directly rather than through Spring. */
     private val gateway = FakePaymentGateway()
 
+    /** Verifies equal idempotent requests always produce the same successful provider reference. */
     @Test
     fun `success method returns stable provider reference`() {
         val request = request("pm-test-success")
@@ -26,11 +34,13 @@ class FakePaymentGatewayTest {
         assertTrue(first is GatewayAuthorizationResult.Authorized)
     }
 
+    /** Verifies the configured decline token returns a normal business result instead of throwing. */
     @Test
     fun `rejected method is a business result`() {
         assertTrue(gateway.authorize(request("pm-test-rejected")) is GatewayAuthorizationResult.Rejected)
     }
 
+    /** Verifies the configured infrastructure-error token crosses the technical exception boundary. */
     @Test
     fun `error method is a technical exception`() {
         assertThrows(PaymentGatewayException::class.java) {
@@ -38,6 +48,11 @@ class FakePaymentGatewayTest {
         }
     }
 
+    /**
+     * Creates a valid provider-neutral request while varying only the scenario-driving method token.
+     *
+     * @param method fake payment-method token selecting the expected behavior.
+     */
     private fun request(method: String) = PaymentGatewayRequest(
         OrderId("order-1"),
         OrderId("order-1"),

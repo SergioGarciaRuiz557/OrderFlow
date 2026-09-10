@@ -29,14 +29,40 @@ import org.testcontainers.junit.jupiter.Testcontainers
 import java.math.BigDecimal
 import java.time.Instant
 
+/**
+ * End-to-end persistence and transaction tests against a disposable real PostgreSQL instance.
+ *
+ * [SpringBootTest] starts the production component graph, including Flyway, Hibernate mappings,
+ * repository adapter, advisory-lock adapter, application services, and fake gateway. Testcontainers
+ * supplies PostgreSQL rather than an in-memory substitute, so SQL constraints, advisory locks,
+ * timestamp types, and optimistic version behavior match production semantics.
+ *
+ * The suite is skipped when Docker is unavailable so domain and application unit tests remain usable
+ * in restricted development environments. CI and completion verification should run it with Docker.
+ */
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 class PaymentPersistenceIntegrationTest {
-    @Autowired private lateinit var repository: PaymentRepository
-    @Autowired private lateinit var authorizePayment: AuthorizePaymentUseCase
-    @Autowired private lateinit var getPayment: GetPaymentUseCase
-    @Autowired private lateinit var flyway: Flyway
+    /** Domain-facing repository implemented by the production JPA adapter. */
+    @Autowired
+    private lateinit var repository: PaymentRepository
 
+    /** Production authorization input port used to exercise lock, gateway, domain, and persistence. */
+    @Autowired
+    private lateinit var authorizePayment: AuthorizePaymentUseCase
+
+    /** Production read input port used to verify application-level retrieval. */
+    @Autowired
+    private lateinit var getPayment: GetPaymentUseCase
+
+    /** Flyway runtime metadata used to prove the versioned production migration was applied. */
+    @Autowired
+    private lateinit var flyway: Flyway
+
+    /**
+     * Proves Flyway creates a schema compatible with Hibernate and that a complete pending aggregate
+     * survives an insert/load round trip with a database-assigned optimistic-lock version.
+     */
     @Test
     fun `Flyway migration and repository persist payment`() {
         val payment = pending("migration-order")
@@ -49,6 +75,10 @@ class PaymentPersistenceIntegrationTest {
         assertEquals(saved, loaded)
     }
 
+    /**
+     * Exercises a successful authorization twice and verifies the second command returns the same
+     * provider reference as an already-processed result instead of creating another charge.
+     */
     @Test
     fun `application authorization is retrievable without a second charge`() {
         val command = AuthorizePaymentCommand(
@@ -65,6 +95,10 @@ class PaymentPersistenceIntegrationTest {
         assertTrue(duplicate.alreadyProcessed)
     }
 
+    /**
+     * Bypasses the application pre-check intentionally to prove PostgreSQL independently enforces the
+     * one-payment-per-order invariant and the adapter translates its integrity exception.
+     */
     @Test
     fun `database uniqueness prevents two payments for one order`() {
         repository.save(pending("unique-order"))
@@ -74,6 +108,10 @@ class PaymentPersistenceIntegrationTest {
         }
     }
 
+    /**
+     * Verifies the subtle transaction contract for infrastructure failure: the technical exception
+     * reaches the caller, yet the pending payment commits and is available for a stable-key retry.
+     */
     @Test
     fun `technical gateway failure keeps pending payment for idempotent retry`() {
         val command = AuthorizePaymentCommand(
@@ -87,6 +125,7 @@ class PaymentPersistenceIntegrationTest {
         assertEquals(PaymentStatus.PENDING, repository.findByOrderId(command.orderId)?.status)
     }
 
+    /** Creates a deterministic valid pending aggregate for direct repository scenarios. */
     private fun pending(orderId: String): Payment = Payment.pending(
         PaymentId.new(),
         OrderId(orderId),
@@ -95,11 +134,21 @@ class PaymentPersistenceIntegrationTest {
         Instant.parse("2026-01-01T10:00:00Z"),
     )
 
+    /** Static Testcontainers lifecycle and Spring datasource override hooks. */
     companion object {
+        /** PostgreSQL version used to execute the production migration and persistence behavior. */
         @Container
         @JvmStatic
         val postgres = PostgreSQLContainer<Nothing>("postgres:16-alpine")
 
+        /**
+         * Replaces local datasource defaults with the running container's connection properties.
+         *
+         * [DynamicPropertySource] runs before Spring creates its datasource, avoiding hard-coded ports
+         * and credentials because Testcontainers chooses them dynamically.
+         *
+         * @param registry Spring property registry populated for this integration-test context.
+         */
         @DynamicPropertySource
         @JvmStatic
         fun databaseProperties(registry: DynamicPropertyRegistry) {
