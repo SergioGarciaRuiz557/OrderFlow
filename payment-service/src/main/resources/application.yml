@@ -16,3 +16,18 @@ spring:
   flyway:
     # Applies versioned payment migrations before Hibernate validates its entity mapping.
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+    producer:
+      acks: all
+
+orderflow:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    group: ${PAYMENT_COMMANDS_GROUP:payment-service.commands}
+    topics:
+      payment-commands: ${ORDER_PAYMENT_COMMANDS_TOPIC:order.payment.commands}
+      payment-events: ${PAYMENT_ORDER_EVENTS_TOPIC:payment.order.events}

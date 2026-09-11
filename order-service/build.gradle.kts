@@ -30,6 +30,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     // Outbound persistence adapter, transactions, Hibernate, and Spring Data repositories.
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.kafka:spring-kafka")
     // Versioned database migrations plus PostgreSQL-specific Flyway support.
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
@@ -41,6 +42,7 @@ dependencies {
     // Disposable real PostgreSQL support for integration tests.
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:kafka")
 }
 
 tasks.withType<Test> {

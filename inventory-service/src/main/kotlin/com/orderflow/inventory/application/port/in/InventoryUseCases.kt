@@ -11,7 +11,7 @@ import com.orderflow.inventory.domain.model.ReservationResult
 /**
  * Transport-independent input required to request a stock reservation.
  *
- * Future REST or Kafka adapters can construct this command without introducing their transport
+ * REST or Kafka adapters can construct this command without introducing their transport
  * types into the application or domain layers.
  *
  * @property productId product whose available stock should be allocated.
@@ -28,7 +28,7 @@ data class ReserveInventoryCommand(
  * Inbound application port for allocating product stock to an order.
  *
  * The port exposes an explicit domain outcome and does not assume whether the caller is an HTTP
- * controller, a test, or a future Kafka consumer.
+ * controller, a test, or the Kafka consumer.
  */
 fun interface ReserveInventoryUseCase {
     /**

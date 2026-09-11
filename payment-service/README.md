@@ -2,8 +2,8 @@
 
 `payment-service` owns the Payment bounded context. It is a Kotlin/Spring Boot service organized as
 a hexagonal architecture: the domain contains payment rules, application ports describe use cases
-and infrastructure needs, and outbound adapters implement PostgreSQL persistence and the current
-deterministic gateway. There is intentionally no public REST API and no Kafka code in this version.
+and infrastructure needs, and outbound adapters implement PostgreSQL persistence, Kafka messaging,
+and the current deterministic gateway. There is intentionally no public REST API.
 
 ## Aggregate and lifecycle
 
@@ -66,13 +66,9 @@ Flyway owns the `payments` schema. Hibernate only validates it. Local connection
 `jdbc:postgresql://localhost:5432/payment` with user/password `payment`; `DB_URL`, `DB_USERNAME`, and
 `DB_PASSWORD` override them.
 
-## Future Kafka role
+## Kafka integration
 
-Kafka is deliberately deferred. A future inbound adapter will deserialize `AuthorizePaymentCommand`,
-map transport values to the application command, and invoke `AuthorizePaymentUseCase`. Known business
-declines will lead to `PaymentRejectedEvent`; successful decisions to `PaymentAuthorizedEvent`.
-Technical gateway failures will escape the use case and remain eligible for consumer retry. Domain
-and application packages will remain unaware of Kafka.
+The `payment-service.commands` group consumes `AuthorizePaymentCommand` from `order.payment.commands`. The application invokes a semantic output port and the Kafka adapter publishes `PaymentAuthorizedEvent` or `PaymentRejectedEvent` to `payment.order.events`. Known gateway declines are business events; technical gateway failures still propagate and produce no rejection event. Payment logs contain safe identifiers and envelope metadata, never sensitive payment details.
 
 ## Tests
 

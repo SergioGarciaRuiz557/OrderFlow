@@ -1,5 +1,7 @@
 # Notification Service
 
+Kafka is the primary inbound integration mechanism. The `notification-service.order-events` group consumes `OrderConfirmedEvent` and `OrderCancelledEvent` from `order.events`; the listener validates/maps each JSON envelope and invokes the existing confirmation or cancellation notification input port. Notification terminates the current flow and therefore has no Kafka producer.
+
 - **Bounded Context:** Notification
 - **Language:** Kotlin
 - **Architecture:** Hexagonal Architecture
@@ -10,8 +12,7 @@
 Notification Service creates and delivers customer-facing messages for final order lifecycle events.
 It currently supports deterministic order confirmation and order cancellation notifications.
 
-The service has no REST API. Its intended inbound mechanism is asynchronous messaging, but it is
-currently independent of Kafka.
+The service has no REST API. Its inbound mechanism is asynchronous Kafka messaging.
 
 ## Architectural structure
 
@@ -28,7 +29,7 @@ currently independent of Kafka.
   order id, and message while requiring no provider account or external infrastructure.
 
 Delivery exceptions are propagated. They are not translated into order cancellation or another
-business outcome, allowing a future event consumer to apply an appropriate retry policy.
+business outcome, allowing the Kafka consumer to fail processing without acknowledging the record.
 
 ## Persistence decision
 
@@ -42,14 +43,12 @@ There is no database, JPA, Flyway, or delivery-status model because the current 
 send a notification, not to provide an audit history. Auditing can be added later if it becomes an
 explicit business requirement.
 
-## Future Kafka integration
+## Kafka integration
 
-Future adapters under `adapter/in/kafka` can consume `OrderConfirmedEvent` and
-`OrderCancelledEvent`, map their payloads to the application commands, and invoke the corresponding
-input ports. Listeners must remain thin; message construction and delivery orchestration stay in the
-application layer.
-
-Kafka is intentionally not included in the current build.
+Adapters under `adapter/in/kafka` consume `OrderConfirmedEvent` and `OrderCancelledEvent`, map their
+payloads to application commands, and invoke the corresponding input ports. Listeners remain thin;
+message construction and delivery orchestration stay in the application layer. No outbound Kafka
+adapter exists because Notification currently terminates the workflow.
 
 ## Why the domain is intentionally simple
 

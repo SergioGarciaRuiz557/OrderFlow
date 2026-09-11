@@ -5,6 +5,7 @@ import com.orderflow.inventory.application.port.`out`.InventoryRepository
 import com.orderflow.inventory.domain.model.InventoryItem
 import com.orderflow.inventory.domain.model.ProductId
 import com.orderflow.inventory.domain.model.ReservationId
+import com.orderflow.inventory.domain.model.OrderId
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.stereotype.Repository
@@ -46,6 +47,10 @@ class JpaInventoryRepositoryAdapter(
     @Transactional(readOnly = true)
     override fun findByReservationId(reservationId: ReservationId): InventoryItem? =
         repository.findAggregateByReservationId(reservationId.value)?.let(mapper::toDomain)
+
+    @Transactional(readOnly = true)
+    override fun findByOrderId(orderId: OrderId): List<InventoryItem> =
+        repository.findAggregatesByOrderId(orderId.value).map(mapper::toDomain)
 
     /**
      * Inserts or optimistically updates a complete inventory aggregate.

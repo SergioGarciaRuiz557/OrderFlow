@@ -6,7 +6,7 @@ import com.orderflow.notification.domain.model.Recipient
 /**
  * Framework- and transport-independent request to notify a customer of order confirmation.
  *
- * A future Kafka adapter will map `OrderConfirmedEvent` data into this command. Keeping the command
+ * The Kafka adapter maps `OrderConfirmedEvent` data into this command. Keeping the command
  * free of Kafka classes means the application contract can also be invoked from tests or another
  * inbound adapter without changing the use case.
  *

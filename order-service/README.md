@@ -148,6 +148,8 @@ prevents Spring Boot from discovering two competing PostgreSQL connection defini
 
 Domain and ordinary application-service tests run without Spring. Integration tests use a disposable PostgreSQL Testcontainer to verify Flyway, persistence/rehydration, and the REST-to-database path; they are skipped when Docker is unavailable.
 
-## Future Kafka role
+## Kafka integration
 
-Domain events and result-handler input ports already express the integration boundary, but no Kafka classes or serialization contracts are present. The local publisher deliberately performs no transport work, so REST and PostgreSQL remain fully functional without Kafka. A later integration commit can add Kafka inbound/outbound adapters without changing the domain or application use cases.
+Order publishes `ReserveInventoryCommand` and `ReleaseInventoryCommand` to `order.inventory.commands`, `AuthorizePaymentCommand` to `order.payment.commands`, and final order events to `order.events`. It consumes Inventory and Payment result events using the explicit groups `order-service.inventory-events` and `order-service.payment-events`.
+
+The Java adapters exchange the same documented JSON contracts consumed and produced by the Kotlin services. Domain events remain separate from integration messages. Order remains the natural home of a future persisted fulfillment Saga, but this increment adds transport only.

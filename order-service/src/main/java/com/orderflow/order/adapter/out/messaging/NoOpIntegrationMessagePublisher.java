@@ -3,17 +3,18 @@ package com.orderflow.order.adapter.out.messaging;
 import com.orderflow.order.application.port.out.IntegrationMessagePublisher;
 import com.orderflow.order.domain.event.OrderDomainEvent;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 
 /**
- * Development-safe publisher used before transport infrastructure exists.
+ * Development-safe publisher used only when Kafka is explicitly disabled.
  *
  * <p>It satisfies the application port so local REST and persistence work without Kafka. It does not
- * claim delivery or serialize domain events; a later adapter must replace it when cross-service
- * communication is introduced.</p>
+ * claim delivery or serialize domain events. Production defaults to the Kafka implementation.</p>
  */
 @Component
+@ConditionalOnProperty(name = "orderflow.kafka.enabled", havingValue = "false")
 public class NoOpIntegrationMessagePublisher implements IntegrationMessagePublisher {
     /** Creates the stateless local publisher discovered by Spring component scanning. */
     public NoOpIntegrationMessagePublisher() {
@@ -26,6 +27,6 @@ public class NoOpIntegrationMessagePublisher implements IntegrationMessagePublis
      */
     @Override
     public void publish(List<OrderDomainEvent> events) {
-        // A Kafka adapter will replace this local sink in a later integration commit.
+        // Explicitly disabled messaging keeps isolated persistence/HTTP tests deterministic.
     }
 }

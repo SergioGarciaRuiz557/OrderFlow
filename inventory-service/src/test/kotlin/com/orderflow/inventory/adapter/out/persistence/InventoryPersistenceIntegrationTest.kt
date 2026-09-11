@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
  * different locking semantics. Tests are skipped when Docker is unavailable so ordinary unit tests
  * remain runnable, but CI environments with Docker execute every persistence scenario.
  */
-@SpringBootTest
+@SpringBootTest(properties = ["orderflow.kafka.enabled=false"])
 @Testcontainers(disabledWithoutDocker = true)
 class InventoryPersistenceIntegrationTest {
     /** Domain-facing repository used to verify persistence round trips and stale writes. */

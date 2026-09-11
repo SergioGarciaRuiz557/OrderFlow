@@ -14,7 +14,7 @@ The service follows hexagonal architecture. A useful reading order is:
 4. `domain/model` validates values, calculates totals, and controls order transitions.
 5. `application/port/out` declares the infrastructure capabilities required by the application.
 6. `adapter/out/persistence` maps the aggregate to JPA and PostgreSQL.
-7. `adapter/out/messaging` is the replaceable boundary for future Kafka publication.
+7. `adapter/in/kafka` and `adapter/out/kafka` map versioned JSON messages to and from those ports.
 
 The dependency direction always points towards the domain. Domain classes have no Spring, JPA,
 HTTP, PostgreSQL, or Kafka imports.
@@ -34,8 +34,8 @@ HTTP, PostgreSQL, or Kafka imports.
 6. The application asks the aggregate to request inventory. The aggregate moves from `PENDING` to
    `INVENTORY_RESERVATION_PENDING` and records `InventoryReservationRequested`.
 7. `JpaOrderRepositoryAdapter` maps and saves the complete aggregate in one transaction.
-8. `IntegrationMessagePublisher` receives the pending domain events. The current adapter is a no-op;
-   a later Kafka adapter can replace it without changing the use case.
+8. `IntegrationMessagePublisher` receives pending domain events and the Kafka adapter maps supported
+   events to order-keyed integration commands/events.
 9. The controller returns `201 Created`, the resource location, and `OrderResponse`.
 
 ### `GET /api/orders/{orderId}`
@@ -48,8 +48,7 @@ HTTP, PostgreSQL, or Kafka imports.
 
 ## Asynchronous lifecycle callbacks
 
-There are no Kafka adapters yet. The four handler input ports are nevertheless complete application
-boundaries that a future consumer can call:
+Kafka listeners validate Inventory and Payment envelopes and call five application boundaries:
 
 | Input port | Application service | Aggregate behavior | Resulting state |
 | --- | --- | --- | --- |
@@ -57,6 +56,7 @@ boundaries that a future consumer can call:
 | `HandleInventoryRejectedUseCase` | `HandleInventoryRejectedService` | Records rejection and cancellation | `CANCELLED` |
 | `HandlePaymentAuthorizedUseCase` | `HandlePaymentAuthorizedService` | Records authorization and confirmation | `CONFIRMED` |
 | `HandlePaymentRejectedUseCase` | `HandlePaymentRejectedService` | Records rejection and asks for inventory release | `CANCELLATION_PENDING` |
+| `HandleInventoryReleasedUseCase` | `HandleInventoryReleasedService` | Completes cancellation after release | `CANCELLED` |
 
 Handlers load, call domain behavior, save, and publish in that order. They do not assign statuses
 directly. Repeated callbacks are handled by the aggregate so idempotency remains consistent for every

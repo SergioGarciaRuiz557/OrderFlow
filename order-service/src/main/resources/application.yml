@@ -17,6 +17,26 @@ spring:
   flyway:
     # Applies versioned classpath migrations before Hibernate validates its mappings.
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+    producer:
+      acks: all
+
+orderflow:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    topics:
+      inventory-commands: ${ORDER_INVENTORY_COMMANDS_TOPIC:order.inventory.commands}
+      inventory-events: ${INVENTORY_ORDER_EVENTS_TOPIC:inventory.order.events}
+      payment-commands: ${ORDER_PAYMENT_COMMANDS_TOPIC:order.payment.commands}
+      payment-events: ${PAYMENT_ORDER_EVENTS_TOPIC:payment.order.events}
+      order-events: ${ORDER_EVENTS_TOPIC:order.events}
+    groups:
+      inventory-events: ${ORDER_INVENTORY_EVENTS_GROUP:order-service.inventory-events}
+      payment-events: ${ORDER_PAYMENT_EVENTS_GROUP:order-service.payment-events}
 
 server:
   # Order uses a dedicated HTTP port by default and remains configurable in deployment.

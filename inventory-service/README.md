@@ -77,6 +77,6 @@ externally managed database.
 ./gradlew bootRun
 ```
 
-## Future Kafka role
+## Kafka integration
 
-A future `adapter/in/kafka` can translate `ReserveInventoryCommand` messages to `ReserveInventoryUseCase` and call `ReleaseInventoryUseCase` for compensations. A future outbound adapter can publish `InventoryReservedEvent`, `InventoryRejectedEvent`, and `InventoryReleasedEvent`. No Kafka transport types or dependencies exist in the domain or application layers today.
+The `inventory-service.commands` group consumes `ReserveInventoryCommand` and `ReleaseInventoryCommand` from `order.inventory.commands`. Thin adapters validate/map the local JSON DTOs and invoke Inventory input ports. Definitive outcomes are published through `InventoryEventPublisher` as `InventoryReservedEvent`, `InventoryRejectedEvent`, or `InventoryReleasedEvent` on `inventory.order.events`; stock rejection is a normal business event, not a technical exception.

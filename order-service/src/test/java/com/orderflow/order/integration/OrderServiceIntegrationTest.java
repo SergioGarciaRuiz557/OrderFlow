@@ -55,6 +55,7 @@ class OrderServiceIntegrationTest {
      */
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
+        registry.add("orderflow.kafka.enabled", () -> "false");
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);

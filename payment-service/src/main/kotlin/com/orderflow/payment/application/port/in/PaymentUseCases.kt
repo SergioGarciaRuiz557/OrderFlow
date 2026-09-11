@@ -10,7 +10,7 @@ import com.orderflow.payment.domain.model.PaymentMethodId
 /**
  * Framework-independent input required to authorize one order payment.
  *
- * A future Kafka adapter will deserialize transport data and construct this command before invoking
+ * The Kafka adapter deserializes transport data and constructs this command before invoking
  * [AuthorizePaymentUseCase]. Using domain value objects at the input-port boundary guarantees that
  * blank identifiers, unsupported money, and invalid scale are rejected before orchestration begins.
  *

@@ -28,6 +28,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
     // Flyway owns schema evolution; the PostgreSQL module adds database-specific migration support.
     implementation("org.flywaydb:flyway-core")
@@ -51,6 +53,7 @@ dependencies {
     // Integration tests launch an isolated real PostgreSQL instance when Docker is available.
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.testcontainers:postgresql:1.21.4")
+    testImplementation("org.testcontainers:kafka:1.21.4")
 }
 
 tasks.withType<Test> {

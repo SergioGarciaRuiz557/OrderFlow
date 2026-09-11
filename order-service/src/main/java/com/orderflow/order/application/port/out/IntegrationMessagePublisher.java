@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * Outbound boundary for delivering business facts beyond the local transaction.
  *
- * <p>The current implementation intentionally does nothing. A future Kafka adapter can translate
- * domain events into versioned integration messages while this interface remains transport-neutral.</p>
+ * <p>The Kafka adapter translates supported domain events into versioned integration messages while
+ * this application interface remains transport-neutral.</p>
  */
 public interface IntegrationMessagePublisher {
     /**

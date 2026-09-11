@@ -56,4 +56,17 @@ interface SpringDataInventoryRepository : JpaRepository<InventoryItemJpaEntity, 
     fun findAggregateByReservationId(
         @Param("reservationId") reservationId: java.util.UUID,
     ): InventoryItemJpaEntity?
+
+    @Query(
+        """
+        select distinct inventory
+        from InventoryItemJpaEntity inventory
+        left join fetch inventory.reservations
+        where exists (
+            select reservation.reservationId from StockReservationJpaEntity reservation
+            where reservation.inventoryItem = inventory and reservation.orderId = :orderId
+        )
+        """,
+    )
+    fun findAggregatesByOrderId(@Param("orderId") orderId: String): List<InventoryItemJpaEntity>
 }

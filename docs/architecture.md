@@ -12,6 +12,19 @@ Adapter -> Application -> Domain
 
 The domain does not depend on the application or adapters. The application does not depend on concrete adapter implementations.
 
+Kafka is external infrastructure and exists only in adapter/configuration packages:
+
+```text
+REST -> Order adapter -> Application -> Domain
+                              |
+                              v
+                    Kafka outbound adapter -> Kafka
+
+Kafka -> Kafka inbound adapter -> Application -> Domain
+```
+
+Listeners validate and map JSON contracts before invoking input ports. Producers map domain/application outcomes to local transport DTOs. Neither Domain nor Application imports Kafka APIs, knows topic names, or serializes its models directly.
+
 ## Package conventions
 
 ### `domain`
@@ -30,5 +43,4 @@ Hexagonal Architecture does not place business logic in adapters. Adapters trans
 
 ## Current state
 
-Only package boundaries and Spring Boot entry points exist. No domain model, use cases, adapters, persistence, messaging, or HTTP endpoints have been implemented.
-
+Order, Inventory, and Payment persist their domain state in PostgreSQL. Kafka connects all four services asynchronously through five bounded-context-oriented topics. Reliability features beyond at-least-once-capable transport are intentionally deferred; see [messaging limitations](messaging/README.md#known-limitations).

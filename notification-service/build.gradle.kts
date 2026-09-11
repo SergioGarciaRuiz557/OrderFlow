@@ -18,10 +18,15 @@ repositories {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework.boot:spring-boot-starter-json")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation(kotlin("reflect"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(kotlin("test-junit5"))
     testImplementation("io.mockk:mockk:1.14.6")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    testImplementation("org.testcontainers:kafka:1.21.4")
 }
 
 tasks.withType<Test> {

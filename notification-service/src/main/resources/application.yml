@@ -1,4 +1,15 @@
 spring:
   application:
     name: notification-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
 
+orderflow:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    group: ${NOTIFICATION_ORDER_EVENTS_GROUP:notification-service.order-events}
+    topics:
+      order-events: ${ORDER_EVENTS_TOPIC:order.events}

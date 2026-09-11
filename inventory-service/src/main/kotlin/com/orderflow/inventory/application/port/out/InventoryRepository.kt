@@ -3,6 +3,7 @@ package com.orderflow.inventory.application.port.`out`
 import com.orderflow.inventory.domain.model.InventoryItem
 import com.orderflow.inventory.domain.model.ProductId
 import com.orderflow.inventory.domain.model.ReservationId
+import com.orderflow.inventory.domain.model.OrderId
 
 /**
  * Outbound persistence port for complete [InventoryItem] aggregates.
@@ -27,6 +28,9 @@ interface InventoryRepository {
      * @return the owning aggregate with its complete reservation history, or `null` if unknown.
      */
     fun findByReservationId(reservationId: ReservationId): InventoryItem?
+
+    /** Loads all product aggregates containing a reservation for the order. */
+    fun findByOrderId(orderId: OrderId): List<InventoryItem>
 
     /**
      * Persists a complete aggregate using its optimistic-lock version.

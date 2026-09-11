@@ -40,7 +40,7 @@ import java.time.Instant
  * The suite is skipped when Docker is unavailable so domain and application unit tests remain usable
  * in restricted development environments. CI and completion verification should run it with Docker.
  */
-@SpringBootTest
+@SpringBootTest(properties = ["orderflow.kafka.enabled=false"])
 @Testcontainers(disabledWithoutDocker = true)
 class PaymentPersistenceIntegrationTest {
     /** Domain-facing repository implemented by the production JPA adapter. */

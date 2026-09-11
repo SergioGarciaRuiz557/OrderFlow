@@ -2,6 +2,8 @@
 
 OrderFlow is a distributed backend project intended to demonstrate professional JVM backend engineering using microservices, Hexagonal Architecture, Domain-Driven Design, and event-driven communication.
 
+Apache Kafka now provides JSON-based asynchronous communication between the four bounded contexts. The versioned contracts and topic topology are documented in [docs/messaging](docs/messaging/README.md). This transport increment intentionally does not claim Saga completion, Transactional Outbox, exactly-once delivery, generic consumer idempotency, retries, or Dead Letter Topics.
+
 ## Services
 
 | Service | Language | Responsibility |
@@ -11,7 +13,7 @@ OrderFlow is a distributed backend project intended to demonstrate professional 
 | `payment-service` | Kotlin | Payment authorization |
 | `notification-service` | Kotlin | Order notifications |
 
-The Order and Inventory bounded contexts include their first functional implementations. Payment and Notification remain architectural bootstraps and will be introduced incrementally in future commits.
+All four bounded contexts include functional application behavior and Kafka adapters while remaining independently buildable and deployable.
 
 ## Architecture
 

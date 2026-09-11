@@ -26,6 +26,9 @@ repositories {
 dependencies {
     // Outbound persistence adapter: Spring transactions, Hibernate, JDBC, and Spring Data repositories.
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework.boot:spring-boot-starter-json")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     // Flyway executes versioned schema migrations, with explicit PostgreSQL database support.
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
@@ -41,6 +44,7 @@ dependencies {
     // Starts an isolated real PostgreSQL instance for persistence and migration verification.
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.testcontainers:postgresql:1.21.4")
+    testImplementation("org.testcontainers:kafka:1.21.4")
 }
 
 tasks.withType<Test> {

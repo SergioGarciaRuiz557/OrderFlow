@@ -16,3 +16,18 @@ spring:
   flyway:
     # Applies versioned migrations before JPA initializes and validates its mappings.
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+    producer:
+      acks: all
+
+orderflow:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    group: ${INVENTORY_COMMANDS_GROUP:inventory-service.commands}
+    topics:
+      inventory-commands: ${ORDER_INVENTORY_COMMANDS_TOPIC:order.inventory.commands}
+      inventory-events: ${INVENTORY_ORDER_EVENTS_TOPIC:inventory.order.events}

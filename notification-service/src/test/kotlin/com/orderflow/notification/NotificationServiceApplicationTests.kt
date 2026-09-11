@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest
  * [SpringBootTest] starts the application context without requiring a REST endpoint, Kafka broker,
  * database, or external email provider.
  */
-@SpringBootTest
+@SpringBootTest(properties = ["orderflow.kafka.enabled=false"])
 class NotificationServiceApplicationTests {
 
     /**
