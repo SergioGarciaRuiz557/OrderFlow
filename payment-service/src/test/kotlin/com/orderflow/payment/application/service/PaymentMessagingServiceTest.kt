@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 
 class PaymentMessagingServiceTest {
-    @Test fun `technical authorization failure propagates without publishing a business rejection`() {
+    @Test fun `el fallo técnico de autorización se propaga sin publicar un rechazo de negocio`() {
         val authorization = mockk<AuthorizePaymentUseCase>()
         val events = mockk<PaymentEventPublisher>(relaxed = true)
         val command = AuthorizePaymentCommand(OrderId("550e8400-e29b-41d4-a716-446655440000"),

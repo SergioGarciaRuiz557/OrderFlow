@@ -1,46 +1,46 @@
-# OrderFlow Architecture
+# Arquitectura de OrderFlow
 
-OrderFlow is organized as independent bounded contexts. Every microservice follows the same Hexagonal Architecture package convention while retaining its own build lifecycle and domain model.
+OrderFlow se organiza en contextos delimitados independientes. Cada microservicio sigue la misma convención de paquetes de Arquitectura Hexagonal, pero conserva su propio ciclo de compilación y su propio modelo de dominio.
 
-## Dependency direction
+## Dirección de las dependencias
 
-Dependencies point inward:
+Las dependencias apuntan hacia dentro:
 
 ```text
-Adapter -> Application -> Domain
+Adaptador -> Aplicación -> Dominio
 ```
 
-The domain does not depend on the application or adapters. The application does not depend on concrete adapter implementations.
+El dominio no depende de la aplicación ni de los adaptadores. La aplicación no depende de implementaciones concretas de los adaptadores.
 
-Kafka is external infrastructure and exists only in adapter/configuration packages:
+Kafka es infraestructura externa y solo está presente en los paquetes de adaptadores y configuración:
 
 ```text
-REST -> Order adapter -> Application -> Domain
+REST -> Adaptador de Order -> Aplicación -> Dominio
                               |
                               v
-                    Kafka outbound adapter -> Kafka
+                    Adaptador de salida Kafka -> Kafka
 
-Kafka -> Kafka inbound adapter -> Application -> Domain
+Kafka -> Adaptador de entrada Kafka -> Aplicación -> Dominio
 ```
 
-Listeners validate and map JSON contracts before invoking input ports. Producers map domain/application outcomes to local transport DTOs. Neither Domain nor Application imports Kafka APIs, knows topic names, or serializes its models directly.
+Los consumidores validan y mapean los contratos JSON antes de invocar los puertos de entrada. Los productores mapean los resultados del dominio y de la aplicación a DTO de transporte locales. Ni el dominio ni la aplicación importan APIs de Kafka, conocen los nombres de los topics o serializan directamente sus modelos.
 
-## Package conventions
+## Convenciones de paquetes
 
 ### `domain`
 
-Contains business rules and concepts. Its subpackages are reserved for aggregates, entities and value objects (`model`), domain events (`event`), domain-specific failures (`exception`), and domain services (`service`). Domain services are appropriate only when behavior cannot naturally belong to an aggregate or value object.
+Contiene las reglas y los conceptos de negocio. Sus subpaquetes se reservan para agregados, entidades y objetos de valor (`model`), eventos de dominio (`event`), errores específicos del dominio (`exception`) y servicios de dominio (`service`). Los servicios de dominio solo son apropiados cuando un comportamiento no puede pertenecer de forma natural a un agregado u objeto de valor.
 
 ### `application`
 
-Coordinates use cases without infrastructure-specific behavior. `port.in` contains the input ports that expose use cases, `port.out` contains the output ports required by those use cases, and `service` contains future use-case implementations that coordinate ports and domain objects.
+Coordina los casos de uso sin comportamientos específicos de infraestructura. `port.in` contiene los puertos de entrada que exponen casos de uso, `port.out` contiene los puertos de salida que requieren esos casos de uso y `service` contiene las futuras implementaciones de casos de uso que coordinan puertos y objetos de dominio.
 
 ### `adapter`
 
-Connects application ports to technologies and delivery mechanisms. Inbound adapters will live under `in.rest` and `in.kafka`. Outbound adapters will live under `out.persistence`, `out.kafka`, and `out.external`.
+Conecta los puertos de aplicación con tecnologías y mecanismos de entrega. Los adaptadores de entrada residirán en `in.rest` e `in.kafka`. Los adaptadores de salida residirán en `out.persistence`, `out.kafka` y `out.external`.
 
-Hexagonal Architecture does not place business logic in adapters. Adapters translate between external concerns and application ports; business rules remain in the domain.
+La Arquitectura Hexagonal no sitúa lógica de negocio en los adaptadores. Los adaptadores traducen entre aspectos externos y puertos de aplicación; las reglas de negocio permanecen en el dominio.
 
-## Current state
+## Estado actual
 
-Order, Inventory, and Payment persist their domain state in PostgreSQL. Kafka connects all four services asynchronously through five bounded-context-oriented topics. Reliability features beyond at-least-once-capable transport are intentionally deferred; see [messaging limitations](messaging/README.md#known-limitations).
+Order, Inventory y Payment persisten su estado de dominio en PostgreSQL. Kafka conecta los cuatro servicios de forma asíncrona mediante cinco topics orientados a contextos delimitados. Las funcionalidades de fiabilidad que exceden un transporte con capacidad at-least-once se han pospuesto deliberadamente; consulte las [limitaciones de mensajería](messaging/README.md#limitaciones-conocidas).

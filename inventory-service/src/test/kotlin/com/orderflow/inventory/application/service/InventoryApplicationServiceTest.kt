@@ -21,32 +21,33 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Unit tests for orchestration performed by [InventoryApplicationService].
+ * Pruebas unitarias de la orquestación realizada por [InventoryApplicationService].
  *
- * MockK replaces outbound ports so these tests verify application decisions independently of Spring,
- * JPA, PostgreSQL, and wall-clock time. Domain arithmetic has its own focused test suite.
+ * MockK sustituye los puertos de salida para que estas pruebas verifiquen las decisiones de la
+ * aplicación con independencia de Spring, JPA, PostgreSQL y la hora del sistema. La aritmética del
+ * dominio cuenta con su propia suite de pruebas específica.
  */
 class InventoryApplicationServiceTest {
-    /** Mock persistence boundary used to control loaded state and verify writes. */
+    /** Límite de persistencia simulado para controlar el estado cargado y verificar las escrituras. */
     private val repository = mockk<InventoryRepository>()
 
-    /** Mock time boundary that makes lifecycle timestamps deterministic. */
+    /** Límite temporal simulado que hace deterministas las marcas de tiempo del ciclo de vida. */
     private val clock = mockk<ClockProvider>()
 
-    /** System under test assembled directly without a Spring application context. */
+    /** Sistema bajo prueba construido directamente sin un contexto de aplicación de Spring. */
     private val service = InventoryApplicationService(repository, clock)
 
-    /** Fixed time returned for scenarios that create a lifecycle transition. */
+    /** Instante fijo devuelto en los escenarios que crean una transición del ciclo de vida. */
     private val now = Instant.parse("2026-01-01T00:00:00Z")
 
     /**
-     * Verifies the successful orchestration path: load, domain reservation, and aggregate save.
+     * Verifica la ruta correcta de orquestación: carga, reserva de dominio y guardado del agregado.
      *
-     * The assertion on the saved quantity ensures the service persists the aggregate returned by
-     * domain behavior rather than the stale instance initially loaded from the repository.
+     * La aserción sobre la cantidad guardada garantiza que el servicio persista el agregado devuelto
+     * por el comportamiento del dominio y no la instancia obsoleta cargada inicialmente del repositorio.
      */
     @Test
-    fun `reserve orchestrates aggregate and repository`() {
+    fun `la reserva orquesta el agregado y el repositorio`() {
         val productId = ProductId("product-1")
         every { repository.findByProductId(productId) } returns InventoryItem.create(productId, 10)
         every { clock.now() } returns now
@@ -61,13 +62,14 @@ class InventoryApplicationServiceTest {
     }
 
     /**
-     * Verifies that absent inventory becomes an explicit business rejection without a write.
+     * Verifica que un inventario ausente se convierta en un rechazo de negocio explícito sin escritura.
      *
-     * This protects the contract that business failure is represented by the sealed result hierarchy
-     * instead of `null`, an exception, or creation of stock implicitly during an order request.
+     * Esto protege el contrato por el que un fallo de negocio se representa mediante la jerarquía
+     * sellada de resultados, en lugar de `null`, una excepción o la creación implícita de existencias
+     * durante una solicitud de pedido.
      */
     @Test
-    fun `missing inventory is an explicit business rejection`() {
+    fun `un inventario ausente es un rechazo de negocio explícito`() {
         val productId = ProductId("missing")
         every { repository.findByProductId(productId) } returns null
 
@@ -81,13 +83,13 @@ class InventoryApplicationServiceTest {
     }
 
     /**
-     * Verifies that an unknown release identifier is reported and never persisted silently.
+     * Verifica que se informe de un identificador de liberación desconocido y nunca se persista en silencio.
      *
-     * The caller can therefore distinguish a duplicate known release from a malformed or stale
-     * command referencing a reservation that never existed.
+     * Así, el llamador puede distinguir una liberación conocida duplicada de un comando incorrecto u
+     * obsoleto que haga referencia a una reserva que nunca existió.
      */
     @Test
-    fun `unknown release remains visible to caller`() {
+    fun `una liberación desconocida permanece visible para el llamador`() {
         val reservationId = ReservationId(UUID.randomUUID())
         every { repository.findByReservationId(reservationId) } returns null
 

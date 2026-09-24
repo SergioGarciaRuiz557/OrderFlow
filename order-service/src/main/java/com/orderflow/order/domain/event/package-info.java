@@ -1,7 +1,7 @@
 /**
- * Local domain facts recorded by the Order aggregate.
+ * Hechos locales del dominio registrados por el agregado Order.
  *
- * <p>These events communicate business meaning to the application layer. They deliberately contain
- * no Kafka annotations, topic names, serialization rules, or transport-specific metadata.</p>
+ * <p>Estos eventos comunican significado de negocio a la capa de aplicación. Deliberadamente, no contienen
+ * anotaciones de Kafka, nombres de tópicos, reglas de serialización ni metadatos específicos del transporte.</p>
  */
 package com.orderflow.order.domain.event;

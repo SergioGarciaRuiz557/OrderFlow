@@ -4,22 +4,22 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Starts the Order Service Spring Boot application.
+ * Inicia la aplicación Spring Boot de Order Service.
  *
- * <p>{@link SpringBootApplication} makes this class the root for component scanning and enables
- * Spring Boot auto-configuration for REST, validation, JPA, Flyway, and PostgreSQL.</p>
+ * <p>{@link SpringBootApplication} convierte esta clase en la raíz del escaneo de componentes y habilita
+ * la configuración automática de Spring Boot para REST, validación, JPA, Flyway y PostgreSQL.</p>
  */
 @SpringBootApplication
 public class OrderServiceApplication {
 
-    /** Creates the bootstrap component; Spring Boot invokes the static entry point in production. */
+    /** Crea el componente de arranque; Spring Boot invoca el punto de entrada estático en producción. */
     public OrderServiceApplication() {
     }
 
     /**
-     * Application process entry point.
+     * Punto de entrada del proceso de la aplicación.
      *
-     * @param args command-line arguments forwarded to Spring Boot
+     * @param args argumentos de la línea de comandos que se reenvían a Spring Boot
      */
     public static void main(String[] args) {
         SpringApplication.run(OrderServiceApplication.class, args);

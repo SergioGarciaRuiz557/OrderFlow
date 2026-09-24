@@ -8,17 +8,17 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Instant;
 
-/** Creates production implementations of nondeterministic application output ports. */
+/** Crea implementaciones de producción de los puertos de salida no deterministas de la aplicación. */
 @Configuration
 public class SystemProvidersConfiguration {
-    /** Creates the stateless Spring configuration component. */
+    /** Crea el componente de configuración de Spring sin estado. */
     public SystemProvidersConfiguration() {
     }
 
     /**
-     * Uses the UTC system timeline for domain timestamps.
+     * Utiliza la línea temporal UTC del sistema para las marcas temporales del dominio.
      *
-     * @return production clock adapter
+     * @return adaptador de reloj de producción
      */
     @Bean
     ClockProvider clockProvider() {
@@ -26,9 +26,9 @@ public class SystemProvidersConfiguration {
     }
 
     /**
-     * Generates random UUID-backed Order identities in production.
+     * Genera en producción identidades aleatorias de Order respaldadas por UUID.
      *
-     * @return production identity adapter
+     * @return adaptador de identidad de producción
      */
     @Bean
     OrderIdGenerator orderIdGenerator() {

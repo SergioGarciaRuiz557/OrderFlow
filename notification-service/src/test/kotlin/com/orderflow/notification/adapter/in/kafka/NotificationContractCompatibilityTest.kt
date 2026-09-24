@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class NotificationContractCompatibilityTest {
-    @Test fun `consumes Java Order fixtures without a shared DTO library`() {
+    @Test fun `consume los datos de prueba Java de Pedidos sin una biblioteca de DTO compartida`() {
         val confirmed = mockk<SendOrderConfirmedNotificationUseCase>(relaxed = true)
         val cancelled = mockk<SendOrderCancelledNotificationUseCase>(relaxed = true)
         val listener = OrderEventsKafkaListener(ObjectMapper(), confirmed, cancelled)

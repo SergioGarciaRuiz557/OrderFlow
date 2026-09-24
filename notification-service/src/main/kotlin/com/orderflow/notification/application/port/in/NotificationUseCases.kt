@@ -4,14 +4,14 @@ import com.orderflow.notification.domain.model.OrderId
 import com.orderflow.notification.domain.model.Recipient
 
 /**
- * Framework- and transport-independent request to notify a customer of order confirmation.
+ * Solicitud independiente del framework y del transporte para notificar al cliente la confirmación del pedido.
  *
- * The Kafka adapter maps `OrderConfirmedEvent` data into this command. Keeping the command
- * free of Kafka classes means the application contract can also be invoked from tests or another
- * inbound adapter without changing the use case.
+ * El adaptador de Kafka mapea en este comando los datos de `OrderConfirmedEvent`. Al mantener el
+ * comando libre de clases de Kafka, el contrato de aplicación también puede invocarse desde pruebas
+ * u otro adaptador de entrada sin modificar el caso de uso.
  *
- * @property orderId confirmed order to mention in the message.
- * @property recipient customer who must receive the message.
+ * @property orderId pedido confirmado que se mencionará en el mensaje.
+ * @property recipient cliente que debe recibir el mensaje.
  */
 data class SendOrderConfirmedNotificationCommand(
     val orderId: OrderId,
@@ -19,13 +19,14 @@ data class SendOrderConfirmedNotificationCommand(
 )
 
 /**
- * Framework- and transport-independent request to notify a customer of order cancellation.
+ * Solicitud independiente del framework y del transporte para notificar al cliente la cancelación del pedido.
  *
- * The separate command gives cancellation an explicit application vocabulary and prevents the
- * input boundary from depending on a generic action flag or on a transport event type.
+ * El comando específico proporciona a la cancelación un vocabulario de aplicación explícito y
+ * evita que el límite de entrada dependa de un indicador de acción genérico o de un tipo de evento
+ * de transporte.
  *
- * @property orderId cancelled order to mention in the message.
- * @property recipient customer who must receive the message.
+ * @property orderId pedido cancelado que se mencionará en el mensaje.
+ * @property recipient cliente que debe recibir el mensaje.
  */
 data class SendOrderCancelledNotificationCommand(
     val orderId: OrderId,
@@ -33,36 +34,37 @@ data class SendOrderCancelledNotificationCommand(
 )
 
 /**
- * Primary input port for the order-confirmed notification workflow.
+ * Puerto de entrada principal del flujo de notificación de pedido confirmado.
  *
- * Inbound technology depends on this interface rather than on the concrete application service.
- * Declaring it as a `fun interface` expresses that the boundary has one operation and also permits
- * lightweight lambda implementations where useful.
+ * La tecnología de entrada depende de esta interfaz y no del servicio de aplicación concreto.
+ * Declararla como `fun interface` expresa que el límite tiene una sola operación y también permite
+ * implementaciones lambda ligeras cuando resulten útiles.
  */
 fun interface SendOrderConfirmedNotificationUseCase {
     /**
-     * Builds and delivers the confirmation notification represented by [command].
+     * Construye y entrega la notificación de confirmación representada por [command].
      *
-     * @param command validated order and recipient values supplied by an inbound adapter.
-     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException when
-     * the selected outbound delivery mechanism fails technically.
+     * @param command valores validados del pedido y destinatario proporcionados por un adaptador de entrada.
+     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException cuando
+     * el mecanismo de entrega de salida seleccionado falla por un problema técnico.
      */
     fun send(command: SendOrderConfirmedNotificationCommand)
 }
 
 /**
- * Primary input port for the order-cancelled notification workflow.
+ * Puerto de entrada principal del flujo de notificación de pedido cancelado.
  *
- * The port remains independent of Kafka so a future listener only needs to deserialize, map, and
- * invoke this contract. Notification behavior stays in the application layer.
+ * El puerto se mantiene independiente de Kafka para que un futuro listener solo tenga que
+ * deserializar, mapear e invocar este contrato. El comportamiento de notificación permanece en la
+ * capa de aplicación.
  */
 fun interface SendOrderCancelledNotificationUseCase {
     /**
-     * Builds and delivers the cancellation notification represented by [command].
+     * Construye y entrega la notificación de cancelación representada por [command].
      *
-     * @param command validated order and recipient values supplied by an inbound adapter.
-     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException when
-     * the selected outbound delivery mechanism fails technically.
+     * @param command valores validados del pedido y destinatario proporcionados por un adaptador de entrada.
+     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException cuando
+     * el mecanismo de entrega de salida seleccionado falla por un problema técnico.
      */
     fun send(command: SendOrderCancelledNotificationCommand)
 }

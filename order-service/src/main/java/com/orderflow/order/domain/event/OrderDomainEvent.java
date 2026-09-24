@@ -5,23 +5,23 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Common contract for facts emitted by the Order aggregate.
+ * Contrato común de los hechos emitidos por el agregado Order.
  *
- * <p>The contract intentionally contains only domain data shared by all events. Delivery metadata,
- * Kafka keys, headers, schema versions, and serialization belong to a future outbound adapter.</p>
+ * <p>El contrato contiene intencionadamente solo los datos de dominio compartidos por todos los eventos. Los metadatos
+ * de entrega, las claves de Kafka, las cabeceras, las versiones del esquema y la serialización pertenecen al adaptador de salida.</p>
  */
 public interface OrderDomainEvent {
     /**
-     * Identifies the aggregate that produced this fact.
+     * Identifica el agregado que produjo este hecho.
      *
-     * @return aggregate that produced the event
+     * @return agregado que produjo el evento
      */
     OrderId orderId();
 
     /**
-     * Identifies when the fact occurred according to the application clock.
+     * Identifica cuándo ocurrió el hecho según el reloj de la aplicación.
      *
-     * @return business time at which the transition occurred
+     * @return instante de negocio en el que ocurrió la transición
      */
     Instant occurredAt();
 }

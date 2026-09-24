@@ -7,19 +7,19 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-/** Implements the domain-facing repository port with Spring Data JPA and explicit mapping. */
+/** Implementa el puerto de repositorio orientado al dominio con Spring Data JPA y mapeo explícito. */
 @Repository
 public class JpaOrderRepositoryAdapter implements OrderRepository {
-    /** Internal CRUD mechanism that operates only on persistence entities. */
+    /** Mecanismo CRUD interno que opera únicamente con entidades de persistencia. */
     private final SpringDataOrderRepository repository;
-    /** Translation boundary between persistence and domain representations. */
+    /** Límite de traducción entre las representaciones de persistencia y del dominio. */
     private final OrderPersistenceMapper mapper;
 
     /**
-     * Creates the repository adapter.
+     * Crea el adaptador de repositorio.
      *
-     * @param repository internal Spring Data repository
-     * @param mapper explicit persistence mapper
+     * @param repository repositorio interno de Spring Data
+     * @param mapper mapeador explícito de persistencia
      */
     public JpaOrderRepositoryAdapter(SpringDataOrderRepository repository, OrderPersistenceMapper mapper) {
         this.repository = repository;
@@ -27,10 +27,10 @@ public class JpaOrderRepositoryAdapter implements OrderRepository {
     }
 
     /**
-     * Maps and saves a complete aggregate, then maps the managed result back to include its version.
+     * Mapea y guarda un agregado completo y, a continuación, vuelve a mapear el resultado administrado para incluir su versión.
      *
-     * @param order aggregate to insert or update
-     * @return saved aggregate representation
+     * @param order agregado que se insertará o actualizará
+     * @return representación del agregado guardado
      */
     @Override
     public Order save(Order order) {
@@ -38,10 +38,10 @@ public class JpaOrderRepositoryAdapter implements OrderRepository {
     }
 
     /**
-     * Loads and rehydrates an aggregate when its UUID exists.
+     * Carga y rehidrata un agregado cuando existe su UUID.
      *
-     * @param orderId requested identity
-     * @return optional domain aggregate
+     * @param orderId identidad solicitada
+     * @return agregado opcional del dominio
      */
     @Override
     public Optional<Order> findById(OrderId orderId) {

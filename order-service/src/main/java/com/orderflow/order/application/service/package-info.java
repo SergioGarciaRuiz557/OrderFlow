@@ -1,5 +1,5 @@
 /**
- * Transactional use-case orchestration for the Order bounded context.
- * Services coordinate ports and aggregate behavior but do not implement domain rules themselves.
+ * Orquestación transaccional de casos de uso para el contexto delimitado de Order.
+ * Los servicios coordinan puertos y el comportamiento del agregado, pero no implementan por sí mismos reglas del dominio.
  */
 package com.orderflow.order.application.service;

@@ -4,28 +4,29 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 /**
- * Spring Boot entry-point configuration for Notification Service.
+ * Configuración del punto de entrada de Spring Boot para el servicio de notificaciones.
  *
- * This class has no business behavior. Its only responsibility is to define the root of the Spring
- * application context. Because it lives in the `com.orderflow.notification` root package,
- * component scanning discovers the application services and the fake outbound adapter located in
- * its subpackages.
+ * Esta clase no contiene comportamiento de negocio. Su única responsabilidad es definir la raíz
+ * del contexto de aplicación de Spring. Como se encuentra en el paquete raíz
+ * `com.orderflow.notification`, el escaneo de componentes descubre los servicios de aplicación y
+ * el adaptador de salida simulado situados en sus subpaquetes.
  *
- * [SpringBootApplication] combines Spring's configuration, component-scanning, and
- * auto-configuration facilities. Keeping that framework concern here prevents the domain model and
- * application ports from depending on Spring Boot.
+ * [SpringBootApplication] combina las capacidades de configuración, escaneo de componentes y
+ * autoconfiguración de Spring. Mantener aquí esa responsabilidad del framework evita que el modelo
+ * de dominio y los puertos de aplicación dependan de Spring Boot.
  */
 @SpringBootApplication
 class NotificationServiceApplication
 
 /**
- * Starts Notification Service as an independently executable process.
+ * Inicia el servicio de notificaciones como un proceso ejecutable independiente.
  *
- * [runApplication] creates the Spring application context, applies the configuration from
- * `application.yml`, discovers the service beans, and keeps the process running. The spread
- * operator (`*`) forwards every command-line argument received by this process to Spring Boot.
+ * [runApplication] crea el contexto de aplicación de Spring, aplica la configuración de
+ * `application.yml`, descubre los beans del servicio y mantiene el proceso en ejecución. El
+ * operador de expansión (`*`) reenvía a Spring Boot todos los argumentos de línea de comandos que
+ * recibe este proceso.
  *
- * @param args optional command-line arguments supplied to the application process.
+ * @param args argumentos opcionales de línea de comandos proporcionados al proceso de la aplicación.
  */
 fun main(args: Array<String>) {
     runApplication<NotificationServiceApplication>(*args)

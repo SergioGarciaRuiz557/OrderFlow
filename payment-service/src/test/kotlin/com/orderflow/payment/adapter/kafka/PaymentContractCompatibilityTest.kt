@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class PaymentContractCompatibilityTest {
-    @Test fun `consumes the Java Order fixture without a shared DTO library`() {
+    @Test fun `consume los datos de prueba Java de Pedidos sin una biblioteca de DTO compartida`() {
         val useCase = mockk<PaymentMessagingUseCase>(relaxed = true)
         AuthorizePaymentKafkaListener(ObjectMapper(), useCase).listen(fixture("AuthorizePaymentCommand.json"))
         verify(exactly = 1) { useCase.authorize(any()) }

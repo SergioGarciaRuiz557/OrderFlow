@@ -8,15 +8,16 @@ import com.orderflow.payment.domain.model.PaymentId
 import com.orderflow.payment.domain.model.PaymentMethodId
 
 /**
- * Framework-independent input required to authorize one order payment.
+ * Entrada independiente del framework necesaria para autorizar el pago de un pedido.
  *
- * The Kafka adapter deserializes transport data and constructs this command before invoking
- * [AuthorizePaymentUseCase]. Using domain value objects at the input-port boundary guarantees that
- * blank identifiers, unsupported money, and invalid scale are rejected before orchestration begins.
+ * El adaptador de Kafka deserializa los datos de transporte y construye este comando antes de invocar
+ * [AuthorizePaymentUseCase]. Usar objetos de valor del dominio en el límite del puerto de entrada
+ * garantiza que se rechacen los identificadores en blanco, los valores monetarios no admitidos y las
+ * escalas no válidas antes de comenzar la coordinación.
  *
- * @property orderId order and business payment operation to authorize.
- * @property amount explicit monetary value expected by the order.
- * @property paymentMethodId provider token identifying the customer's payment instrument.
+ * @property orderId pedido y operación de pago de negocio que se deben autorizar.
+ * @property amount valor monetario explícito esperado por el pedido.
+ * @property paymentMethodId token del proveedor que identifica el instrumento de pago del cliente.
  */
 data class AuthorizePaymentCommand(
     val orderId: OrderId,
@@ -25,29 +26,29 @@ data class AuthorizePaymentCommand(
 )
 
 /**
- * Exhaustive business outcome returned by payment authorization.
+ * Resultado de negocio exhaustivo que devuelve la autorización del pago.
  *
- * Only definitive provider decisions appear here. Infrastructure failures are propagated as
- * [com.orderflow.payment.application.port.out.PaymentGatewayException], because a caller must retry
- * them rather than publish a rejection. The sealed hierarchy makes every caller handle authorization
- * and rejection explicitly with an exhaustive `when` expression.
+ * Aquí solo aparecen decisiones definitivas del proveedor. Los fallos de infraestructura se propagan
+ * como [com.orderflow.payment.application.port.out.PaymentGatewayException], porque el llamador debe
+ * reintentarlos en lugar de publicar un rechazo. La jerarquía sellada obliga a cada llamador a tratar
+ * explícitamente la autorización y el rechazo mediante una expresión `when` exhaustiva.
  */
 sealed interface PaymentAuthorizationResult {
-    /** Aggregate snapshot containing the definitive outcome. */
+    /** Instantánea del agregado que contiene el resultado definitivo. */
     val payment: Payment
 
     /**
-     * Indicates whether the response came from an earlier completed authorization.
+     * Indica si la respuesta procede de una autorización anterior ya completada.
      *
-     * `true` means the gateway was not called and the database was not rewritten during this request.
+     * `true` significa que no se llamó a la pasarela ni se volvió a escribir la base de datos durante esta solicitud.
      */
     val alreadyProcessed: Boolean
 
     /**
-     * Successful business outcome.
+     * Resultado de negocio satisfactorio.
      *
-     * @property payment authorized aggregate containing its provider reference.
-     * @property alreadyProcessed `true` for an idempotent replay of prior success.
+     * @property payment agregado autorizado que contiene su referencia del proveedor.
+     * @property alreadyProcessed `true` para una repetición idempotente de un resultado satisfactorio anterior.
      */
     data class Authorized(
         override val payment: Payment,
@@ -55,11 +56,11 @@ sealed interface PaymentAuthorizationResult {
     ) : PaymentAuthorizationResult
 
     /**
-     * Definitive business rejection, such as a declined payment instrument.
+     * Rechazo de negocio definitivo, como el de un instrumento de pago rechazado.
      *
-     * @property payment rejected aggregate containing the same reason.
-     * @property reason stable business reason suitable for a future rejection event.
-     * @property alreadyProcessed `true` for an idempotent replay of the original rejection.
+     * @property payment agregado rechazado que contiene el mismo motivo.
+     * @property reason motivo de negocio estable apto para un futuro evento de rechazo.
+     * @property alreadyProcessed `true` para una repetición idempotente del rechazo original.
      */
     data class Rejected(
         override val payment: Payment,
@@ -69,32 +70,33 @@ sealed interface PaymentAuthorizationResult {
 }
 
 /**
- * Primary input port for processing a payment authorization.
+ * Puerto de entrada principal para procesar una autorización de pago.
  *
- * Inbound technologies depend on this interface rather than on [com.orderflow.payment.application.service.AuthorizePaymentService],
- * keeping Kafka, tests, or another future adapter replaceable without altering the business workflow.
+ * Las tecnologías de entrada dependen de esta interfaz en lugar de
+ * [com.orderflow.payment.application.service.AuthorizePaymentService], lo que permite sustituir
+ * Kafka, las pruebas u otro adaptador futuro sin modificar el flujo de negocio.
  */
 fun interface AuthorizePaymentUseCase {
     /**
-     * Authorizes a new payment or returns the stored outcome for an exact duplicate.
+     * Autoriza un pago nuevo o devuelve el resultado almacenado para un duplicado exacto.
      *
-     * @param command validated business request.
-     * @return authorized or rejected definitive business result.
-     * @throws com.orderflow.payment.application.service.PaymentRequestConflictException when the
-     * order already has a payment with different immutable request data.
-     * @throws com.orderflow.payment.application.port.out.PaymentGatewayException when no definitive
-     * provider decision can be obtained.
+     * @param command solicitud de negocio validada.
+     * @return resultado de negocio definitivo, autorizado o rechazado.
+     * @throws com.orderflow.payment.application.service.PaymentRequestConflictException cuando el
+     * pedido ya tiene un pago con datos inmutables de solicitud diferentes.
+     * @throws com.orderflow.payment.application.port.out.PaymentGatewayException cuando no se puede
+     * obtener una decisión definitiva del proveedor.
      */
     fun authorize(command: AuthorizePaymentCommand): PaymentAuthorizationResult
 }
 
-/** Read-only input port for retrieving the current snapshot of a payment aggregate. */
+/** Puerto de entrada de solo lectura para recuperar la instantánea actual de un agregado de pago. */
 fun interface GetPaymentUseCase {
     /**
-     * Looks up a payment by its aggregate identifier.
+     * Busca un pago por el identificador de su agregado.
      *
-     * @param paymentId identifier assigned when the payment was created.
-     * @return persisted payment or `null` when the identifier is unknown.
+     * @param paymentId identificador asignado al crear el pago.
+     * @return pago conservado o `null` cuando el identificador es desconocido.
      */
     fun getPayment(paymentId: PaymentId): Payment?
 }

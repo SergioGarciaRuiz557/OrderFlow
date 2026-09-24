@@ -1,6 +1,41 @@
-# Allows Spring Boot to discover the inventory infrastructure when the application is launched
-# with the repository root as its working directory (for example, from the IDE).
+# Permite que Spring Boot descubra la infraestructura local compartida cuando las aplicaciones se
+# inician con la raíz del repositorio como directorio de trabajo (por ejemplo, desde el IDE).
 name: orderflow-inventory
 
 include:
   - path: inventory-service/compose.yaml
+
+services:
+  kafka:
+    image: apache/kafka-native:3.8.0
+    ports:
+      # Los microservicios iniciados desde el host/IDE utilizan localhost:9092.
+      - "9092:9092"
+    environment:
+      # Configuración KRaft de un solo nodo: Kafka gestiona sus propios metadatos sin ZooKeeper.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,HOST:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: HOST://:9092,INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # Los topics internos de Kafka deben admitir un clúster de desarrollo con un único broker.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+
+volumes:
+  kafka-data:

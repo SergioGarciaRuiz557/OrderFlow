@@ -27,17 +27,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Unit test for successful inventory-result orchestration without Spring. */
+/** Prueba unitaria de la orquestación de un resultado correcto de inventario sin Spring. */
 @ExtendWith(MockitoExtension.class)
 class HandleInventoryReservedServiceTest {
-    /** Supplies and captures the aggregate. */
+    /** Proporciona y captura el agregado. */
     @Mock OrderRepository repository;
-    /** Captures events without a transport. */
+    /** Captura eventos sin un transporte. */
     @Mock IntegrationMessagePublisher publisher;
-    /** Supplies deterministic callback processing time. */
+    /** Proporciona un instante determinista para procesar la notificación. */
     @Mock ClockProvider clock;
 
-    /** Verifies the handler advances reservation success through to payment pending and saves it. */
+    /** Verifica que el gestor haga avanzar la reserva correcta hasta el pago pendiente y la guarde. */
     @Test
     void shouldMoveOrderToPaymentPending() {
         UUID id = UUID.randomUUID();

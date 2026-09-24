@@ -14,18 +14,18 @@ import java.util.Currency;
 import java.util.List;
 
 /**
- * Explicit bidirectional mapper between the rich aggregate and mutable JPA records.
+ * Mapeador bidireccional explícito entre el agregado rico y los registros JPA mutables.
  *
- * <p>Mapping is intentionally visible code rather than reflection-based magic: every persisted saga
- * recovery field can be audited here, and domain constructors revalidate database values.</p>
+ * <p>El mapeo es código visible de forma intencionada, en lugar de magia basada en reflexión: aquí se puede auditar
+ * cada campo persistido para recuperar la saga y los constructores del dominio vuelven a validar los valores de la base de datos.</p>
  */
 @Component
 class OrderPersistenceMapper {
     /**
-     * Flattens an aggregate into an order row and attached line rows.
+     * Aplana un agregado en una fila de pedido y sus filas de línea adjuntas.
      *
-     * @param order source aggregate
-     * @return new detached persistence graph ready for Spring Data save/merge
+     * @param order agregado de origen
+     * @return grafo de persistencia separado y nuevo, listo para que Spring Data lo guarde o fusione
      */
     JpaOrderEntity toEntity(Order order) {
         JpaOrderEntity entity = new JpaOrderEntity(order.id().value(), order.customerId().value(), order.status(),
@@ -39,12 +39,12 @@ class OrderPersistenceMapper {
     }
 
     /**
-     * Reconstructs and validates a domain aggregate from a complete persistence graph.
+     * Reconstruye y valida un agregado del dominio a partir de un grafo de persistencia completo.
      *
-     * <p>{@link Order#rehydrate} verifies the persisted total and creates no historical events.</p>
+     * <p>{@link Order#rehydrate} verifica el total persistido y no crea eventos históricos.</p>
      *
-     * @param entity loaded order entity with eager line rows
-     * @return framework-independent aggregate
+     * @param entity entidad de pedido cargada con las filas de línea obtenidas de forma inmediata
+     * @return agregado independiente del framework
      */
     Order toDomain(JpaOrderEntity entity) {
         List<OrderLine> lines = entity.lines().stream()

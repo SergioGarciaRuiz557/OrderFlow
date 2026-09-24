@@ -35,23 +35,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Full-stack integration specification using a disposable real PostgreSQL database.
+ * Especificación de integración de la pila completa que utiliza una base de datos PostgreSQL real y desechable.
  *
- * <p>The class verifies the same Flyway migration and Hibernate validation used in production. It is
- * disabled rather than failed when Docker is unavailable.</p>
+ * <p>La clase verifica la misma migración de Flyway y la misma validación de Hibernate que se utilizan en producción.
+ * Se deshabilita, en lugar de fallar, cuando Docker no está disponible.</p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 class OrderServiceIntegrationTest {
-    /** Shared PostgreSQL container started once for this integration-test class. */
+    /** Contenedor compartido de PostgreSQL que se inicia una sola vez para esta clase de pruebas de integración. */
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
 
     /**
-     * Overrides production datasource properties with the container's random connection details.
+     * Sobrescribe las propiedades de producción del origen de datos con los datos de conexión aleatorios del contenedor.
      *
-     * @param registry Spring test property registry
+     * @param registry registro de propiedades de prueba de Spring
      */
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -61,12 +61,12 @@ class OrderServiceIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
-    /** Real hexagonal repository adapter under test. */
+    /** Adaptador hexagonal real de repositorio sometido a prueba. */
     @Autowired OrderRepository repository;
-    /** HTTP test client that invokes the complete Spring MVC stack without an external server. */
+    /** Cliente HTTP de pruebas que invoca la pila completa de Spring MVC sin un servidor externo. */
     @Autowired MockMvc mockMvc;
 
-    /** Verifies JPA mapping, line persistence, total validation, status, and event-free rehydration. */
+    /** Verifica el mapeo JPA, la persistencia de líneas, la validación del total, el estado y la rehidratación sin eventos. */
     @Test
     @Transactional
     void shouldPersistAndRehydrateAggregate() {
@@ -85,7 +85,7 @@ class OrderServiceIntegrationTest {
         assertThat(restored.pullDomainEvents()).isEmpty();
     }
 
-    /** Verifies POST and GET through validation, application, Flyway-created tables, and JPA. */
+    /** Verifica POST y GET a través de la validación, la aplicación, las tablas creadas por Flyway y JPA. */
     @Test
     void shouldCreateAndRetrieveOrderThroughRestApi() throws Exception {
         String body = """
@@ -112,7 +112,7 @@ class OrderServiceIntegrationTest {
                 .andExpect(jsonPath("$.currency").value("EUR"));
     }
 
-    /** Verifies invalid JSON values use the stable structured API error contract. */
+    /** Verifica que los valores JSON no válidos utilicen el contrato estable y estructurado de errores de la API. */
     @Test
     void shouldReturnStructuredValidationError() throws Exception {
         mockMvc.perform(post("/api/orders")

@@ -6,42 +6,44 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 /**
- * Local outbound adapter that simulates email delivery without external infrastructure.
+ * Adaptador de salida local que simula la entrega de correo sin infraestructura externa.
  *
- * The adapter is useful for development and architecture verification: it receives the exact model
- * a real email integration would receive, but records delivery through the application log instead
- * of contacting SMTP, SendGrid, SES, or another provider. It owns no message-building behavior.
+ * El adaptador resulta útil para el desarrollo y la verificación de la arquitectura: recibe el
+ * mismo modelo que recibiría una integración de correo real, pero registra la entrega en el log de
+ * la aplicación en lugar de contactar con SMTP, SendGrid, SES u otro proveedor. No contiene ningún
+ * comportamiento de construcción de mensajes.
  *
- * Replacing this component with an SMTP or email-provider adapter does not affect application or
- * domain code because both depend only on [NotificationSender]. [Component] registers this class as
- * the current Spring implementation of that output port.
+ * Sustituir este componente por un adaptador SMTP o de un proveedor de correo no afecta al código de
+ * aplicación ni de dominio, porque ambos dependen únicamente de [NotificationSender]. [Component]
+ * registra esta clase como implementación actual de Spring para ese puerto de salida.
  */
 @Component
 class FakeEmailNotificationSender : NotificationSender {
-    /** SLF4J logger associated with this adapter class and configured by Spring Boot. */
+    /** Logger de SLF4J asociado a esta clase de adaptador y configurado por Spring Boot. */
     private val logger = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Simulates successful email delivery by writing all relevant notification fields to the log.
+     * Simula una entrega correcta de correo escribiendo en el log todos los campos relevantes.
      *
-     * SLF4J placeholders are used instead of string concatenation so formatting occurs only when the
-     * configured log level enables the statement. The method returns normally after logging, which
-     * represents successful delivery in this deterministic fake.
+     * Se emplean marcadores de posición de SLF4J en lugar de concatenar cadenas para que el formato
+     * solo se aplique cuando el nivel de log configurado habilite la sentencia. El método retorna con
+     * normalidad después de registrar, lo que representa una entrega correcta en esta simulación
+     * determinista.
      *
-     * @param notification complete provider-neutral message created by the application service.
+     * @param notification mensaje completo e independiente del proveedor creado por el servicio de aplicación.
      */
     override fun send(notification: Notification) {
-        // Log structured values separately so production log collectors can parse the delivery trace.
+        // Registra por separado los valores estructurados para que los recolectores analicen la traza de entrega.
         logger.info(
-            // Each `{}` placeholder is filled, in order, by the four arguments below.
+            // Cada marcador `{}` se rellena, en orden, con los cuatro argumentos siguientes.
             "Fake email delivered: recipient={}, type={}, orderId={}, message={}",
-            // First placeholder: validated destination email address.
+            // Primer marcador: dirección de correo de destino validada.
             notification.recipient.email,
-            // Second placeholder: semantic confirmation or cancellation type.
+            // Segundo marcador: tipo semántico de confirmación o cancelación.
             notification.type,
-            // Third placeholder: order correlation identifier.
+            // Tercer marcador: identificador de correlación del pedido.
             notification.orderId.value,
-            // Fourth placeholder: deterministic customer-facing text.
+            // Cuarto marcador: texto determinista destinado al cliente.
             notification.message,
         )
     }

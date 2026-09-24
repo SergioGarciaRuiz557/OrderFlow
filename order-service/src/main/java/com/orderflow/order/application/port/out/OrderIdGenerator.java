@@ -2,12 +2,12 @@ package com.orderflow.order.application.port.out;
 
 import com.orderflow.order.domain.model.OrderId;
 
-/** Supplies new aggregate identities and permits deterministic generators in unit tests. */
+/** Proporciona identidades nuevas del agregado y permite generadores deterministas en las pruebas unitarias. */
 public interface OrderIdGenerator {
     /**
-     * Generates the identity for a new aggregate.
+     * Genera la identidad de un agregado nuevo.
      *
-     * @return identity that has not previously been assigned to an order
+     * @return identidad que no se ha asignado previamente a un pedido
      */
     OrderId nextId();
 }

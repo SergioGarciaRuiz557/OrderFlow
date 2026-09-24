@@ -15,24 +15,24 @@ import java.net.URI;
 import java.util.UUID;
 
 /**
- * HTTP inbound adapter for creating and retrieving orders.
+ * Adaptador HTTP de entrada para crear y consultar pedidos.
  *
- * <p>The controller owns only transport concerns: annotations, DTO mapping, use-case invocation, and
- * HTTP response construction. It contains no pricing or lifecycle rules.</p>
+ * <p>El controlador solo es responsable de cuestiones de transporte: anotaciones, mapeo de DTO, invocación de casos de uso
+ * y construcción de respuestas HTTP. No contiene reglas de valoración ni del ciclo de vida.</p>
  */
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
-    /** Creation input port implemented by the application layer. */
+    /** Puerto de entrada de creación que implementa la capa de aplicación. */
     private final CreateOrderUseCase createOrder;
-    /** Retrieval input port implemented by the application layer. */
+    /** Puerto de entrada de consulta que implementa la capa de aplicación. */
     private final GetOrderUseCase getOrder;
 
     /**
-     * Creates the HTTP adapter with its two application capabilities.
+     * Crea el adaptador HTTP con sus dos capacidades de aplicación.
      *
-     * @param createOrder order-creation boundary
-     * @param getOrder order-query boundary
+     * @param createOrder límite de creación de pedidos
+     * @param getOrder límite de consulta de pedidos
      */
     public OrderController(CreateOrderUseCase createOrder, GetOrderUseCase getOrder) {
         this.createOrder = createOrder;
@@ -40,14 +40,14 @@ public class OrderController {
     }
 
     /**
-     * Validates and maps a creation request, then returns the new resource and its location.
+     * Valida y mapea una petición de creación y, a continuación, devuelve el recurso nuevo y su ubicación.
      *
-     * @param request Bean-validated JSON body
-     * @return {@code 201 Created} response with a {@code Location} header
+     * @param request cuerpo JSON validado por Bean Validation
+     * @return respuesta {@code 201 Created} con una cabecera {@code Location}
      */
     @PostMapping
     public ResponseEntity<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
-        // Transport DTOs stop here; the application receives its own command type.
+        // Los DTO de transporte terminan aquí; la aplicación recibe su propio tipo de comando.
         var command = new CreateOrderUseCase.CreateOrderCommand(
                 request.customerId(),
                 request.items().stream()
@@ -60,10 +60,10 @@ public class OrderController {
     }
 
     /**
-     * Retrieves the current state of one order.
+     * Consulta el estado actual de un pedido.
      *
-     * @param orderId UUID parsed by Spring from the path segment
-     * @return current order representation
+     * @param orderId UUID que Spring analiza a partir del segmento de la ruta
+     * @return representación actual del pedido
      */
     @GetMapping("/{orderId}")
     public OrderResponse get(@PathVariable UUID orderId) {

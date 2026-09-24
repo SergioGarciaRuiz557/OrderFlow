@@ -10,21 +10,22 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Pure Kotlin unit tests for [InventoryItem] aggregate behavior and invariants.
+ * Pruebas unitarias en Kotlin puro del comportamiento y las invariantes del agregado [InventoryItem].
  *
- * No Spring or persistence infrastructure is involved. Each test focuses on a business rule and
- * treats returned aggregates as immutable snapshots of the corresponding domain transition.
+ * No interviene Spring ni infraestructura de persistencia. Cada prueba se centra en una regla de
+ * negocio y trata los agregados devueltos como instantáneas inmutables de la transición de dominio
+ * correspondiente.
  */
 class InventoryItemTest {
-    /** Deterministic timestamp used for reservation and release transitions. */
+    /** Marca de tiempo determinista utilizada en las transiciones de reserva y liberación. */
     private val now = Instant.parse("2026-01-01T00:00:00Z")
 
-    /** Product shared by test aggregates where product identity is not the subject under test. */
+    /** Producto compartido por agregados de prueba cuando su identidad no es el objeto de la prueba. */
     private val productId = ProductId("product-1")
 
-    /** Verifies that accepting a reservation subtracts exactly the requested number of units. */
+    /** Verifica que aceptar una reserva reste exactamente el número de unidades solicitado. */
     @Test
-    fun `reservation decreases stock`() {
+    fun `la reserva reduce las existencias`() {
         val result = inventory(10).reserve(reservationId(), OrderId("order-1"), Quantity(4), now)
 
         assertTrue(result is ReservationResult.Reserved)
@@ -33,9 +34,9 @@ class InventoryItemTest {
         assertEquals(4, result.reservation.quantity.value)
     }
 
-    /** Verifies insufficient stock produces a rejection carrying the observed availability. */
+    /** Verifica que unas existencias insuficientes produzcan un rechazo con la disponibilidad observada. */
     @Test
-    fun `should reject reservation when requested quantity exceeds available stock`() {
+    fun `debe rechazar la reserva cuando la cantidad solicitada supera las existencias disponibles`() {
         val result = inventory(3).reserve(reservationId(), OrderId("order-1"), Quantity(4), now)
 
         assertEquals(
@@ -45,10 +46,11 @@ class InventoryItemTest {
     }
 
     /**
-     * Verifies both reservation evaluation and aggregate construction protect non-negative stock.
+     * Verifica que tanto la evaluación de la reserva como la construcción del agregado protejan
+     * unas existencias no negativas.
      */
     @Test
-    fun `stock never becomes negative`() {
+    fun `las existencias nunca son negativas`() {
         val result = inventory(0).reserve(reservationId(), OrderId("order-1"), Quantity(1), now)
 
         assertTrue(result is ReservationResult.Rejected)
@@ -56,9 +58,9 @@ class InventoryItemTest {
         assertThrows(IllegalArgumentException::class.java) { InventoryItem.create(productId, -1) }
     }
 
-    /** Verifies a first release returns all allocated units and changes reservation state. */
+    /** Verifica que una primera liberación devuelva todas las unidades y cambie el estado de la reserva. */
     @Test
-    fun `release restores stock`() {
+    fun `la liberación repone las existencias`() {
         val reservationId = reservationId()
         val reserved = inventory(10)
             .reserve(reservationId, OrderId("order-1"), Quantity(4), now) as ReservationResult.Reserved
@@ -71,9 +73,9 @@ class InventoryItemTest {
         assertEquals(ReservationStatus.RELEASED, released.reservation.status)
     }
 
-    /** Verifies an idempotent repeated release cannot add the same units a second time. */
+    /** Verifica que una liberación idempotente repetida no pueda añadir las mismas unidades dos veces. */
     @Test
-    fun `duplicate release does not restore stock twice`() {
+    fun `una liberación duplicada no repone las existencias dos veces`() {
         val reservationId = reservationId()
         val reserved = inventory(10)
             .reserve(reservationId, OrderId("order-1"), Quantity(4), now) as ReservationResult.Reserved
@@ -87,12 +89,14 @@ class InventoryItemTest {
     }
 
     /**
-     * Verifies an exact repeated order request returns the original active reservation idempotently.
+     * Verifica que repetir exactamente una solicitud de pedido devuelva de forma idempotente la
+     * reserva activa original.
      *
-     * Returning the same aggregate instance demonstrates that no state transition or write is needed.
+     * Devolver la misma instancia del agregado demuestra que no se necesita una transición de estado
+     * ni una escritura.
      */
     @Test
-    fun `same order and quantity returns existing active reservation idempotently`() {
+    fun `el mismo pedido y cantidad devuelve idempotentemente la reserva activa existente`() {
         val originalId = reservationId()
         val first = inventory(10)
             .reserve(originalId, OrderId("order-1"), Quantity(4), now) as ReservationResult.Reserved
@@ -111,9 +115,9 @@ class InventoryItemTest {
         assertSame(first.inventoryItem, duplicate.inventoryItem)
     }
 
-    /** Verifies an order cannot use the same product reservation key for a different quantity. */
+    /** Verifica que un pedido no pueda usar la misma clave de reserva para una cantidad diferente. */
     @Test
-    fun `same order cannot create a different active reservation`() {
+    fun `el mismo pedido no puede crear una reserva activa diferente`() {
         val first = inventory(10)
             .reserve(reservationId(), OrderId("order-1"), Quantity(4), now) as ReservationResult.Reserved
 
@@ -130,29 +134,29 @@ class InventoryItemTest {
         )
     }
 
-    /** Verifies a release for an unknown identifier remains an explicit domain outcome. */
+    /** Verifica que liberar un identificador desconocido siga siendo un resultado explícito del dominio. */
     @Test
-    fun `unknown reservation cannot be released silently`() {
+    fun `una reserva desconocida no se puede liberar en silencio`() {
         val unknownId = reservationId()
 
         assertEquals(ReleaseResult.ReservationNotFound(unknownId), inventory(10).release(unknownId, now))
     }
 
-    /** Verifies the [Quantity] value object rejects zero and negative reservation requests. */
+    /** Verifica que el objeto de valor [Quantity] rechace solicitudes de reserva nulas o negativas. */
     @Test
-    fun `invalid Quantity is rejected`() {
+    fun `se rechaza una Quantity no válida`() {
         assertThrows(IllegalArgumentException::class.java) { Quantity(0) }
         assertThrows(IllegalArgumentException::class.java) { Quantity(-1) }
     }
 
     /**
-     * Creates a fresh aggregate fixture with no reservation history.
+     * Crea un fixture nuevo del agregado sin historial de reservas.
      *
-     * @param quantity available stock assigned to the fixture.
-     * @return new inventory aggregate for [productId].
+     * @param quantity existencias disponibles asignadas al fixture.
+     * @return nuevo agregado de inventario para [productId].
      */
     private fun inventory(quantity: Int) = InventoryItem.create(productId, quantity)
 
-    /** @return a unique reservation identifier that cannot collide with another test action. */
+    /** @return un identificador de reserva único que no puede colisionar con otra acción de prueba. */
     private fun reservationId() = ReservationId(UUID.randomUUID())
 }

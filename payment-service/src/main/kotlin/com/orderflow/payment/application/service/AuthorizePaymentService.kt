@@ -16,23 +16,25 @@ import com.orderflow.payment.domain.model.PaymentStatus
 import org.springframework.stereotype.Service
 
 /**
- * Application service that coordinates the complete payment authorization use case.
+ * Servicio de aplicación que coordina el caso de uso completo de autorización de pagos.
  *
- * The service contains orchestration, not provider or persistence details. It serializes work for
- * the order, locates or creates the aggregate, delegates the external decision to [PaymentGateway],
- * invokes behavior on [Payment], and persists the resulting snapshot. Business invariants remain in
- * the aggregate, while idempotency decisions that require repository access belong here.
+ * El servicio contiene coordinación, no detalles del proveedor ni de persistencia. Serializa el
+ * trabajo del pedido, localiza o crea el agregado, delega la decisión externa en [PaymentGateway],
+ * invoca el comportamiento de [Payment] y conserva la instantánea resultante. Los invariantes de
+ * negocio permanecen en el agregado, mientras que las decisiones de idempotencia que requieren
+ * acceso al repositorio pertenecen aquí.
  *
- * Technical gateway failures receive special transaction handling: the service converts the thrown
- * exception into a temporary internal value while inside [PaymentAuthorizationLock]. This lets the
- * lock adapter commit the newly created `PENDING` payment. Immediately after that commit, the same
- * exception is rethrown to the caller. The result stays retryable without disguising infrastructure
- * failure as a business rejection.
+ * Los fallos técnicos de la pasarela reciben un tratamiento transaccional especial: el servicio
+ * convierte la excepción lanzada en un valor interno temporal mientras se encuentra dentro de
+ * [PaymentAuthorizationLock]. Así, el adaptador del bloqueo puede confirmar el pago `PENDING` recién
+ * creado. Inmediatamente después de esa confirmación se vuelve a lanzar la misma excepción al
+ * llamador. El resultado sigue siendo reintentable sin disfrazar un fallo de infraestructura como
+ * rechazo de negocio.
  *
- * @property repository domain-facing access to persisted payment aggregates.
- * @property gateway provider-neutral outbound authorization boundary.
- * @property clock deterministic source of creation and transition timestamps.
- * @property authorizationLock cross-instance serialization for the same order.
+ * @property repository acceso dirigido al dominio a los agregados de pago conservados.
+ * @property gateway límite de autorización de salida independiente del proveedor.
+ * @property clock fuente determinista de marcas de tiempo de creación y transición.
+ * @property authorizationLock serialización entre instancias para el mismo pedido.
  */
 @Service
 class AuthorizePaymentService(
@@ -43,59 +45,60 @@ class AuthorizePaymentService(
 ) : AuthorizePaymentUseCase {
 
     /**
-     * Processes a new authorization or returns a previously persisted definitive result.
+     * Procesa una autorización nueva o devuelve un resultado definitivo conservado previamente.
      *
-     * The lock spans repository reads, the gateway call, and repository writes. This is intentional:
-     * without it, two simultaneous commands for a previously unseen order could both call the
-     * external provider before the database uniqueness constraint rejects one local insert.
+     * El bloqueo abarca las lecturas del repositorio, la llamada a la pasarela y las escrituras del
+     * repositorio. Es intencionado: sin él, dos comandos simultáneos para un pedido hasta entonces
+     * desconocido podrían llamar ambos al proveedor externo antes de que la restricción de unicidad
+     * de la base de datos rechazara una de las inserciones locales.
      *
-     * A [PaymentGatewayException] is caught only inside the transaction callback. Returning the
-     * [AuthorizationExecution.TechnicalFailure] marker makes the callback complete normally and
-     * therefore commits `PENDING`; the exhaustive outer `when` then restores the public exception
-     * contract after the lock transaction has ended.
+     * [PaymentGatewayException] solo se captura dentro de la función de retorno de la transacción.
+     * Devolver el marcador [AuthorizationExecution.TechnicalFailure] hace que esta termine con
+     * normalidad y, por tanto, confirme `PENDING`; el `when` exhaustivo externo restablece después el
+     * contrato público de la excepción, una vez finalizada la transacción del bloqueo.
      *
-     * @param command validated order, amount, and payment-method data.
-     * @return a definitive authorized or rejected business result.
-     * @throws PaymentGatewayException after pending retry state has been committed.
-     * @throws PaymentRequestConflictException if an order is repeated with changed request data.
+     * @param command datos validados del pedido, el importe y el método de pago.
+     * @return un resultado de negocio definitivo, autorizado o rechazado.
+     * @throws PaymentGatewayException después de confirmar el estado pendiente de reintento.
+     * @throws PaymentRequestConflictException si se repite un pedido con datos modificados en la solicitud.
      */
     override fun authorize(command: AuthorizePaymentCommand): PaymentAuthorizationResult =
-        // PostgreSQL uses command.orderId to serialize only competing work for this business payment.
+        // PostgreSQL usa command.orderId para serializar únicamente el trabajo que compite por este pago de negocio.
         when (val execution = authorizationLock.withLock(command.orderId) {
             try {
                 AuthorizationExecution.Completed(authorizeWithinLock(command))
             } catch (exception: PaymentGatewayException) {
-                // A normal callback return commits PENDING; the exception is rethrown outside below.
+                // Una devolución normal de la función confirma PENDING; más abajo se vuelve a lanzar la excepción fuera de ella.
                 AuthorizationExecution.TechnicalFailure(exception)
             }
         }) {
-            // Sealing the internal result prevents a future branch from being forgotten here.
+            // Sellar el resultado interno evita que se olvide aquí una futura rama.
             is AuthorizationExecution.Completed -> execution.result
             is AuthorizationExecution.TechnicalFailure -> throw execution.exception
         }
 
     /**
-     * Performs all state-dependent decisions while the order-scoped lock is held.
+     * Toma todas las decisiones dependientes del estado mientras mantiene el bloqueo circunscrito al pedido.
      *
-     * Evaluation order is significant:
-     * 1. Existing state is loaded by the order business key.
-     * 2. A repeated command must have the original amount and method.
-     * 3. An absent payment is created and flushed as pending before the gateway is called.
-     * 4. Terminal payments return idempotently; only pending payments reach the provider.
+     * El orden de evaluación es relevante:
+     * 1. Se carga el estado existente mediante la clave de negocio del pedido.
+     * 2. Un comando repetido debe tener el importe y el método originales.
+     * 3. Un pago ausente se crea y se vacía como pendiente antes de llamar a la pasarela.
+     * 4. Los pagos terminales regresan de forma idempotente; solo los pendientes llegan al proveedor.
      *
-     * @param command authorization request currently protected by the order lock.
-     * @return definitive business result, unless the gateway throws a technical exception.
+     * @param command solicitud de autorización protegida actualmente por el bloqueo del pedido.
+     * @return resultado de negocio definitivo, salvo que la pasarela lance una excepción técnica.
      */
     private fun authorizeWithinLock(command: AuthorizePaymentCommand): PaymentAuthorizationResult {
-        // `findByOrderId` is the application idempotency check performed before any external call.
+        // `findByOrderId` es la comprobación de idempotencia de la aplicación previa a cualquier llamada externa.
         val payment = repository.findByOrderId(command.orderId)
             ?.also { existing ->
-                // Same order with different immutable intent is a conflict, not an idempotent retry.
+                // El mismo pedido con una intención inmutable diferente es un conflicto, no un reintento idempotente.
                 if (!existing.matches(command.amount, command.paymentMethodId)) {
                     throw PaymentRequestConflictException(command.orderId.value)
                 }
             }
-            // The Elvis branch runs only for the first authorization request for this order.
+            // La rama Elvis solo se ejecuta para la primera solicitud de autorización de este pedido.
             ?: repository.save(
                 Payment.pending(
                     id = PaymentId.new(),
@@ -106,12 +109,12 @@ class AuthorizePaymentService(
                 ),
             )
 
-        // Terminal outcomes never call the provider or write again; pending is the sole active state.
+        // Los resultados terminales nunca vuelven a llamar al proveedor ni a escribir; pendiente es el único estado activo.
         return when (payment.status) {
             PaymentStatus.AUTHORIZED -> PaymentAuthorizationResult.Authorized(payment, alreadyProcessed = true)
             PaymentStatus.REJECTED -> PaymentAuthorizationResult.Rejected(
                 payment,
-                // Aggregate invariants guarantee a rejected payment always contains this value.
+                // Los invariantes del agregado garantizan que un pago rechazado siempre contenga este valor.
                 requireNotNull(payment.failureReason),
                 alreadyProcessed = true,
             )
@@ -120,18 +123,18 @@ class AuthorizePaymentService(
     }
 
     /**
-     * Calls the provider for a pending aggregate and persists its definitive domain transition.
+     * Llama al proveedor para un agregado pendiente y conserva su transición definitiva de dominio.
      *
-     * [OrderId] is used as the provider idempotency key. Even if the provider responds successfully
-     * but local persistence later fails, replaying the command uses the same key and must not create
-     * another charge in a conforming gateway implementation.
+     * Se usa [OrderId] como clave de idempotencia del proveedor. Aunque el proveedor responda
+     * satisfactoriamente y después falle la persistencia local, repetir el comando usa la misma clave
+     * y no debe crear otro cargo en una implementación conforme de la pasarela.
      *
-     * @param payment persisted pending aggregate whose immutable request data is sent to the gateway.
-     * @return persisted authorized or rejected application result with `alreadyProcessed = false`.
-     * @throws PaymentGatewayException when the provider does not return a definitive decision.
+     * @param payment agregado pendiente conservado cuyos datos inmutables de solicitud se envían a la pasarela.
+     * @return resultado de aplicación autorizado o rechazado y conservado, con `alreadyProcessed = false`.
+     * @throws PaymentGatewayException cuando el proveedor no devuelve una decisión definitiva.
      */
     private fun authorizePending(payment: Payment): PaymentAuthorizationResult {
-        // This DTO is the only representation visible to an external-provider adapter.
+        // Este DTO es la única representación visible para un adaptador de proveedor externo.
         val request = PaymentGatewayRequest(
             idempotencyKey = payment.orderId,
             orderId = payment.orderId,
@@ -139,15 +142,15 @@ class AuthorizePaymentService(
             paymentMethodId = payment.paymentMethodId,
         )
 
-        // The sealed result keeps normal business outcomes explicit and exhaustive.
+        // El resultado sellado mantiene explícitos y exhaustivos los resultados normales de negocio.
         return when (val outcome = gateway.authorize(request)) {
             is GatewayAuthorizationResult.Authorized -> {
-                // Domain behavior validates the transition before the new snapshot reaches JPA.
+                // El comportamiento del dominio valida la transición antes de que la nueva instantánea llegue a JPA.
                 val saved = repository.save(payment.authorize(outcome.providerReference, clock.now()))
                 PaymentAuthorizationResult.Authorized(saved, alreadyProcessed = false)
             }
             is GatewayAuthorizationResult.Rejected -> {
-                // A known decline is persisted; this branch is never used for technical exceptions.
+                // Se conserva un rechazo conocido; esta rama nunca se usa para excepciones técnicas.
                 val saved = repository.save(payment.reject(outcome.reason, clock.now()))
                 PaymentAuthorizationResult.Rejected(saved, outcome.reason, alreadyProcessed = false)
             }
@@ -155,28 +158,29 @@ class AuthorizePaymentService(
     }
 
     /**
-     * Internal transaction-control result used only to delay technical exception propagation.
+     * Resultado interno de control de la transacción que solo se usa para retrasar la propagación de una excepción técnica.
      *
-     * It is not part of the public use-case contract and never converts a technical failure into a
-     * business result. Its sole purpose is to let the lock callback return normally so pending state
-     * commits before [TechnicalFailure.exception] is rethrown.
+     * No forma parte del contrato público del caso de uso y nunca convierte un fallo técnico en un
+     * resultado de negocio. Su único propósito es permitir que la función del bloqueo regrese con
+     * normalidad para confirmar el estado pendiente antes de volver a lanzar [TechnicalFailure.exception].
      */
     private sealed interface AuthorizationExecution {
-        /** Normal callback completion carrying the public use-case result. */
+        /** Finalización normal de la función que transporta el resultado público del caso de uso. */
         data class Completed(val result: PaymentAuthorizationResult) : AuthorizationExecution
 
-        /** Deferred technical failure that must be rethrown immediately after transaction commit. */
+        /** Fallo técnico diferido que debe volver a lanzarse inmediatamente después de confirmar la transacción. */
         data class TechnicalFailure(val exception: PaymentGatewayException) : AuthorizationExecution
     }
 }
 
 /**
- * Signals reuse of an order id with a different amount or payment method.
+ * Señala la reutilización de un identificador de pedido con un importe o método de pago diferentes.
  *
- * Silently treating changed intent as a retry would either return the wrong historical result or
- * risk charging unexpected data. The application therefore stops before the gateway is called.
+ * Tratar silenciosamente una intención modificada como reintento devolvería un resultado histórico
+ * erróneo o entrañaría el riesgo de cobrar datos inesperados. Por ello, la aplicación se detiene antes
+ * de llamar a la pasarela.
  *
- * @param orderId external order value included in the diagnostic message.
+ * @param orderId valor externo del pedido incluido en el mensaje de diagnóstico.
  */
 class PaymentRequestConflictException(orderId: String) :
     RuntimeException("Order $orderId already has a different payment request")

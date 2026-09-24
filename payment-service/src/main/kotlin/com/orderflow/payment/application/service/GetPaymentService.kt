@@ -7,21 +7,21 @@ import com.orderflow.payment.domain.model.PaymentId
 import org.springframework.stereotype.Service
 
 /**
- * Read-only application service for retrieving payment aggregate snapshots.
+ * Servicio de aplicación de solo lectura para recuperar instantáneas de agregados de pago.
  *
- * The service deliberately exposes the [GetPaymentUseCase] port and delegates storage access to the
- * framework-independent [PaymentRepository]. It contains no CRUD mutation behavior and does not
- * expose Spring Data types to callers.
+ * El servicio expone deliberadamente el puerto [GetPaymentUseCase] y delega el acceso al almacenamiento
+ * en [PaymentRepository], independiente del framework. No contiene comportamiento de mutación CRUD ni
+ * expone tipos de Spring Data a los llamadores.
  *
- * @property repository outbound persistence port used for lookup.
+ * @property repository puerto de persistencia de salida que se usa para la búsqueda.
  */
 @Service
 class GetPaymentService(private val repository: PaymentRepository) : GetPaymentUseCase {
     /**
-     * Retrieves the latest persisted payment without altering state.
+     * Recupera el último pago conservado sin alterar el estado.
      *
-     * @param paymentId aggregate primary key to locate.
-     * @return payment snapshot, or `null` when no such identifier exists.
+     * @param paymentId clave primaria del agregado que se debe localizar.
+     * @return instantánea del pago, o `null` cuando no existe dicho identificador.
      */
     override fun getPayment(paymentId: PaymentId): Payment? = repository.findById(paymentId)
 }

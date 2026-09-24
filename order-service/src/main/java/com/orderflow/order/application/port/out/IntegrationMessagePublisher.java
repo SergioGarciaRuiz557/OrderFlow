@@ -5,16 +5,16 @@ import com.orderflow.order.domain.event.OrderDomainEvent;
 import java.util.List;
 
 /**
- * Outbound boundary for delivering business facts beyond the local transaction.
+ * Límite de salida para entregar hechos de negocio más allá de la transacción local.
  *
- * <p>The Kafka adapter translates supported domain events into versioned integration messages while
- * this application interface remains transport-neutral.</p>
+ * <p>El adaptador de Kafka traduce los eventos de dominio admitidos a mensajes de integración versionados, mientras
+ * esta interfaz de aplicación permanece independiente del transporte.</p>
  */
 public interface IntegrationMessagePublisher {
     /**
-     * Publishes events produced by one aggregate operation in their original order.
+     * Publica los eventos producidos por una operación del agregado en su orden original.
      *
-     * @param events immutable event batch; may be empty after an idempotent callback
+     * @param events lote de eventos inmutable; puede estar vacío tras una notificación idempotente
      */
     void publish(List<OrderDomainEvent> events);
 }

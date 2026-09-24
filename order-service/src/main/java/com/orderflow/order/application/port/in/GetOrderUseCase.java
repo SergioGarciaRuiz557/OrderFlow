@@ -4,14 +4,14 @@ import com.orderflow.order.application.model.OrderView;
 
 import java.util.UUID;
 
-/** Inbound query boundary for retrieving the current representation of an order. */
+/** Límite de consulta de entrada para recuperar la representación actual de un pedido. */
 public interface GetOrderUseCase {
     /**
-     * Loads one aggregate by its external UUID.
+     * Carga un agregado mediante su UUID externo.
      *
-     * @param orderId requested order UUID
-     * @return current order view
-     * @throws com.orderflow.order.application.exception.OrderNotFoundException if no order exists
+     * @param orderId UUID del pedido solicitado
+     * @return vista actual del pedido
+     * @throws com.orderflow.order.application.exception.OrderNotFoundException si el pedido no existe
      */
     OrderView getById(UUID orderId);
 }

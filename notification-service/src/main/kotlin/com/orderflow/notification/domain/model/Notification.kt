@@ -1,80 +1,84 @@
 package com.orderflow.notification.domain.model
 
 /**
- * Strongly typed identifier of the order about which the customer is being notified.
+ * Identificador con tipado fuerte del pedido sobre el que se notifica al cliente.
  *
- * A dedicated type prevents a plain string with a different meaning, such as an email address,
- * from being passed accidentally where an order identifier is expected. [JvmInline] keeps this
- * distinction at compile time without normally allocating an additional wrapper object at runtime.
+ * Un tipo específico evita que se pase por accidente una cadena con otro significado, como una
+ * dirección de correo, donde se espera un identificador de pedido. [JvmInline] conserva esta
+ * distinción en tiempo de compilación sin asignar normalmente un objeto envoltorio adicional en
+ * tiempo de ejecución.
  *
- * @property value external order identifier carried by the final order lifecycle event.
- * @throws IllegalArgumentException when [value] is empty or contains only whitespace.
+ * @property value identificador externo del pedido incluido en el evento final de su ciclo de vida.
+ * @throws IllegalArgumentException cuando [value] está vacío o solo contiene espacios en blanco.
  */
 @JvmInline
 value class OrderId(val value: String) {
-    /** Enforces the only order-id invariant owned by Notification Service. */
+    /** Aplica la única invariante del identificador de pedido que pertenece a Notificaciones. */
     init {
-        // `require` rejects invalid input immediately instead of allowing an unusable notification.
+        // `require` rechaza de inmediato una entrada no válida en vez de permitir una notificación inutilizable.
         require(value.isNotBlank()) { "Order id must not be blank" }
     }
 }
 
 /**
- * Email recipient for a notification.
+ * Destinatario de correo electrónico de una notificación.
  *
- * Validation deliberately checks only the assumptions needed by this service. Provider-specific
- * and RFC-complete validation belongs at a future delivery boundary. [JvmInline] provides type
- * safety while retaining the runtime efficiency of the wrapped string in common call sites.
+ * La validación comprueba deliberadamente solo las condiciones que necesita este servicio. Una
+ * validación completa según las RFC y específica del proveedor corresponderá a un futuro límite de
+ * entrega. [JvmInline] aporta seguridad de tipos y conserva la eficiencia en ejecución de la cadena
+ * envuelta en los puntos de llamada habituales.
  *
- * @property email destination email address preserved exactly as received from the application
- * command.
- * @throws IllegalArgumentException when [email] does not satisfy the intentionally basic format.
+ * @property email dirección de correo de destino conservada exactamente como se recibió del comando
+ * de aplicación.
+ * @throws IllegalArgumentException cuando [email] no cumple el formato básico intencionado.
  */
 @JvmInline
 value class Recipient(val email: String) {
-    /** Prevents clearly invalid recipient data from reaching a delivery adapter. */
+    /** Evita que datos de destinatario claramente inválidos lleguen a un adaptador de entrega. */
     init {
-        // The regular expression checks for text on both sides of `@` and a dotted domain.
+        // La expresión regular comprueba que haya texto a ambos lados de `@` y un dominio con punto.
         require(BASIC_EMAIL.matches(email)) { "Recipient must contain a valid email address" }
     }
 
-    /** Validation implementation shared by every [Recipient] construction. */
+    /** Implementación de validación compartida por cada construcción de [Recipient]. */
     private companion object {
         /**
-         * Deliberately small email check: no whitespace, one address separator, and a dotted domain.
-         * It is not intended to reproduce the complete email RFC or provider-specific rules.
+         * Comprobación de correo deliberadamente reducida: sin espacios, un separador de dirección
+         * y un dominio con punto. No pretende reproducir todas las RFC del correo ni las reglas
+         * específicas de un proveedor.
          */
         val BASIC_EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
     }
 }
 
 /**
- * Closed set of customer-facing order lifecycle messages currently supported by this service.
+ * Conjunto cerrado de mensajes del ciclo de vida del pedido destinados al cliente que admite el servicio.
  *
- * The enum travels through the provider-neutral [Notification] model. Delivery adapters can use it
- * for logging or provider mapping without receiving Kafka event names or other transport concepts.
+ * El enum recorre el modelo [Notification], independiente del proveedor. Los adaptadores de entrega
+ * pueden usarlo para registrar o mapear el proveedor sin recibir nombres de eventos de Kafka ni
+ * otros conceptos de transporte.
  */
 enum class NotificationType {
-    /** The order completed the confirmation flow successfully. */
+    /** El pedido completó correctamente el flujo de confirmación. */
     ORDER_CONFIRMED,
 
-    /** The order reached its final cancelled state. */
+    /** El pedido alcanzó su estado final de cancelación. */
     ORDER_CANCELLED,
 }
 
 /**
- * Immutable, provider-neutral message ready to be delivered to a customer.
+ * Mensaje inmutable e independiente del proveedor, listo para entregarse a un cliente.
  *
- * This data class is intentionally not an aggregate. The service does not persist notifications or
- * manage a delivery lifecycle, so the model only carries the information required by
- * `NotificationSender`. Structural equality supplied by `data class` also makes the contract easy
- * to verify in application tests.
+ * Esta clase de datos no es un agregado de forma intencionada. El servicio no persiste
+ * notificaciones ni gestiona un ciclo de vida de entrega, por lo que el modelo solo transporta la
+ * información que necesita `NotificationSender`. La igualdad estructural que proporciona
+ * `data class` también facilita verificar el contrato en las pruebas de aplicación.
  *
- * @property orderId order whose final lifecycle change produced the notification.
- * @property recipient customer email destination.
- * @property type semantic kind of notification being delivered.
- * @property message deterministic customer-facing text built by the application layer.
- * @throws IllegalArgumentException when [message] is empty or contains only whitespace.
+ * @property orderId pedido cuyo cambio final de ciclo de vida produjo la notificación.
+ * @property recipient dirección de correo del cliente.
+ * @property type tipo semántico de la notificación entregada.
+ * @property message texto determinista destinado al cliente y construido por la capa de aplicación.
+ * @throws IllegalArgumentException cuando [message] está vacío o solo contiene espacios en blanco.
  */
 data class Notification(
     val orderId: OrderId,
@@ -82,9 +86,9 @@ data class Notification(
     val type: NotificationType,
     val message: String,
 ) {
-    /** Ensures every outbound notification contains useful customer-facing content. */
+    /** Garantiza que toda notificación de salida contenga información útil para el cliente. */
     init {
-        // A blank message would be technically sendable but has no valid business purpose.
+        // Sería técnicamente posible enviar un mensaje vacío, pero no tendría una finalidad de negocio válida.
         require(message.isNotBlank()) { "Notification message must not be blank" }
     }
 }

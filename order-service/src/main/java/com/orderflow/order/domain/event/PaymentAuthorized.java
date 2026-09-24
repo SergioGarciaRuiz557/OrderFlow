@@ -5,10 +5,10 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Fact that Payment authorized the requested amount.
+ * Hecho que indica que Payment ha autorizado el importe solicitado.
  *
- * @param orderId authorized aggregate
- * @param occurredAt callback processing time
+ * @param orderId agregado autorizado
+ * @param occurredAt instante de procesamiento de la notificación
  */
 public record PaymentAuthorized(OrderId orderId, Instant occurredAt) implements OrderDomainEvent {
 }

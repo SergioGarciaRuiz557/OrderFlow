@@ -30,41 +30,44 @@ import java.math.BigDecimal
 import java.time.Instant
 
 /**
- * End-to-end persistence and transaction tests against a disposable real PostgreSQL instance.
+ * Pruebas integrales de persistencia y transacciones contra una instancia real y desechable de PostgreSQL.
  *
- * [SpringBootTest] starts the production component graph, including Flyway, Hibernate mappings,
- * repository adapter, advisory-lock adapter, application services, and fake gateway. Testcontainers
- * supplies PostgreSQL rather than an in-memory substitute, so SQL constraints, advisory locks,
- * timestamp types, and optimistic version behavior match production semantics.
+ * [SpringBootTest] inicia el grafo de componentes de producción, incluidas las asignaciones de Flyway
+ * y Hibernate, el adaptador del repositorio, el adaptador del bloqueo asesor, los servicios de
+ * aplicación y la pasarela simulada. Testcontainers proporciona PostgreSQL en lugar de un sustituto
+ * en memoria, de modo que las restricciones SQL, los bloqueos asesores, los tipos de marcas de tiempo
+ * y el comportamiento de la versión optimista coincidan con la semántica de producción.
  *
- * The suite is skipped when Docker is unavailable so domain and application unit tests remain usable
- * in restricted development environments. CI and completion verification should run it with Docker.
+ * El conjunto se omite cuando Docker no está disponible para que las pruebas unitarias de dominio y
+ * aplicación sigan siendo utilizables en entornos de desarrollo restringidos. La integración continua
+ * y la verificación final deben ejecutarlo con Docker.
  */
 @SpringBootTest(properties = ["orderflow.kafka.enabled=false"])
 @Testcontainers(disabledWithoutDocker = true)
 class PaymentPersistenceIntegrationTest {
-    /** Domain-facing repository implemented by the production JPA adapter. */
+    /** Repositorio dirigido al dominio que implementa el adaptador JPA de producción. */
     @Autowired
     private lateinit var repository: PaymentRepository
 
-    /** Production authorization input port used to exercise lock, gateway, domain, and persistence. */
+    /** Puerto de entrada de autorización de producción que se usa para ejercitar el bloqueo, la pasarela, el dominio y la persistencia. */
     @Autowired
     private lateinit var authorizePayment: AuthorizePaymentUseCase
 
-    /** Production read input port used to verify application-level retrieval. */
+    /** Puerto de entrada de lectura de producción que se usa para verificar la recuperación en el nivel de aplicación. */
     @Autowired
     private lateinit var getPayment: GetPaymentUseCase
 
-    /** Flyway runtime metadata used to prove the versioned production migration was applied. */
+    /** Metadatos de Flyway en tiempo de ejecución que demuestran que se aplicó la migración versionada de producción. */
     @Autowired
     private lateinit var flyway: Flyway
 
     /**
-     * Proves Flyway creates a schema compatible with Hibernate and that a complete pending aggregate
-     * survives an insert/load round trip with a database-assigned optimistic-lock version.
+     * Demuestra que Flyway crea un esquema compatible con Hibernate y que un agregado pendiente
+     * completo sobrevive a un ciclo de inserción y carga con una versión de bloqueo optimista asignada
+     * por la base de datos.
      */
     @Test
-    fun `Flyway migration and repository persist payment`() {
+    fun `la migración de Flyway y el repositorio conservan el pago`() {
         val payment = pending("migration-order")
 
         val saved = repository.save(payment)
@@ -76,11 +79,11 @@ class PaymentPersistenceIntegrationTest {
     }
 
     /**
-     * Exercises a successful authorization twice and verifies the second command returns the same
-     * provider reference as an already-processed result instead of creating another charge.
+     * Ejercita dos veces una autorización satisfactoria y verifica que el segundo comando devuelva la
+     * misma referencia del proveedor como resultado ya procesado, en lugar de crear otro cargo.
      */
     @Test
-    fun `application authorization is retrievable without a second charge`() {
+    fun `la autorización de la aplicación se puede recuperar sin un segundo cargo`() {
         val command = AuthorizePaymentCommand(
             OrderId("authorized-order"),
             Money.euros(BigDecimal("31.25")),
@@ -96,11 +99,12 @@ class PaymentPersistenceIntegrationTest {
     }
 
     /**
-     * Bypasses the application pre-check intentionally to prove PostgreSQL independently enforces the
-     * one-payment-per-order invariant and the adapter translates its integrity exception.
+     * Elude intencionadamente la comprobación previa de la aplicación para demostrar que PostgreSQL
+     * aplica de forma independiente el invariante de un pago por pedido y que el adaptador traduce su
+     * excepción de integridad.
      */
     @Test
-    fun `database uniqueness prevents two payments for one order`() {
+    fun `la unicidad de la base de datos impide dos pagos para un pedido`() {
         repository.save(pending("unique-order"))
 
         assertThrows(DuplicatePaymentException::class.java) {
@@ -109,11 +113,12 @@ class PaymentPersistenceIntegrationTest {
     }
 
     /**
-     * Verifies the subtle transaction contract for infrastructure failure: the technical exception
-     * reaches the caller, yet the pending payment commits and is available for a stable-key retry.
+     * Verifica el sutil contrato transaccional para un fallo de infraestructura: la excepción técnica
+     * llega al llamador, pero el pago pendiente se confirma y queda disponible para reintentarlo con
+     * una clave estable.
      */
     @Test
-    fun `technical gateway failure keeps pending payment for idempotent retry`() {
+    fun `el fallo técnico de la pasarela conserva el pago pendiente para un reintento idempotente`() {
         val command = AuthorizePaymentCommand(
             OrderId("technical-error-order"),
             Money.euros(BigDecimal("18.00")),
@@ -125,7 +130,7 @@ class PaymentPersistenceIntegrationTest {
         assertEquals(PaymentStatus.PENDING, repository.findByOrderId(command.orderId)?.status)
     }
 
-    /** Creates a deterministic valid pending aggregate for direct repository scenarios. */
+    /** Crea un agregado pendiente válido y determinista para escenarios directos del repositorio. */
     private fun pending(orderId: String): Payment = Payment.pending(
         PaymentId.new(),
         OrderId(orderId),
@@ -134,20 +139,20 @@ class PaymentPersistenceIntegrationTest {
         Instant.parse("2026-01-01T10:00:00Z"),
     )
 
-    /** Static Testcontainers lifecycle and Spring datasource override hooks. */
+    /** Ciclo de vida estático de Testcontainers y enlaces de sustitución de la fuente de datos de Spring. */
     companion object {
-        /** PostgreSQL version used to execute the production migration and persistence behavior. */
+        /** Versión de PostgreSQL que se usa para ejecutar la migración de producción y el comportamiento de persistencia. */
         @Container
         @JvmStatic
         val postgres = PostgreSQLContainer<Nothing>("postgres:16-alpine")
 
         /**
-         * Replaces local datasource defaults with the running container's connection properties.
+         * Sustituye los valores locales predeterminados de la fuente de datos por las propiedades de conexión del contenedor en ejecución.
          *
-         * [DynamicPropertySource] runs before Spring creates its datasource, avoiding hard-coded ports
-         * and credentials because Testcontainers chooses them dynamically.
+         * [DynamicPropertySource] se ejecuta antes de que Spring cree su fuente de datos, lo que evita
+         * puertos y credenciales codificados porque Testcontainers los elige dinámicamente.
          *
-         * @param registry Spring property registry populated for this integration-test context.
+         * @param registry registro de propiedades de Spring rellenado para este contexto de pruebas de integración.
          */
         @DynamicPropertySource
         @JvmStatic

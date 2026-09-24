@@ -2,12 +2,12 @@ package com.orderflow.order.application.port.in;
 
 import java.util.UUID;
 
-/** Inbound callback boundary for a successful inventory reservation result. */
+/** Límite de notificación de entrada para el resultado correcto de una reserva de inventario. */
 public interface HandleInventoryReservedUseCase {
     /**
-     * Records inventory success and advances the order to payment authorization.
+     * Registra el resultado correcto del inventario y hace avanzar el pedido hasta la autorización del pago.
      *
-     * @param orderId order referenced by the external result
+     * @param orderId pedido al que hace referencia el resultado externo
      */
     void handle(UUID orderId);
 }

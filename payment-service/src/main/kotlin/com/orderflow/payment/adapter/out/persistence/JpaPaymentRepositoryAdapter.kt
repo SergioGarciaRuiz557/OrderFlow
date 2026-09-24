@@ -10,18 +10,20 @@ import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * PostgreSQL/JPA implementation of the framework-independent [PaymentRepository] output port.
+ * Implementación PostgreSQL/JPA del puerto de salida [PaymentRepository], independiente del framework.
  *
- * The adapter owns persistence transaction declarations and all conversion between domain aggregates
- * and JPA entities. Application callers see only [Payment], [PaymentId], and [OrderId]. `saveAndFlush`
- * is used deliberately so optimistic-lock and database-constraint failures occur inside this adapter,
- * where infrastructure exceptions can be translated before they cross the hexagonal boundary.
+ * El adaptador posee las declaraciones de transacciones de persistencia y toda la conversión entre
+ * agregados de dominio y entidades JPA. Los llamadores de la aplicación solo ven [Payment],
+ * [PaymentId] y [OrderId]. Se usa `saveAndFlush` deliberadamente para que los fallos de bloqueo
+ * optimista y de restricciones de la base de datos ocurran dentro de este adaptador, donde las
+ * excepciones de infraestructura pueden traducirse antes de atravesar el límite hexagonal.
  *
- * When called from [PostgreSqlPaymentAuthorizationLock], these methods join its existing transaction.
- * When called independently, each annotation creates the appropriate read-only or read-write scope.
+ * Cuando se llaman desde [PostgreSqlPaymentAuthorizationLock], estos métodos se unen a su transacción
+ * existente. Cuando se llaman de forma independiente, cada anotación crea el ámbito apropiado de solo
+ * lectura o de lectura y escritura.
  *
- * @property repository internal Spring Data entity repository.
- * @property mapper explicit translator between persistence and domain representations.
+ * @property repository repositorio interno de entidades de Spring Data.
+ * @property mapper traductor explícito entre las representaciones de persistencia y dominio.
  */
 @Repository
 class JpaPaymentRepositoryAdapter(
@@ -30,46 +32,46 @@ class JpaPaymentRepositoryAdapter(
 ) : PaymentRepository {
 
     /**
-     * Loads a payment by primary key in a read-only transaction.
+     * Carga un pago por su clave primaria en una transacción de solo lectura.
      *
-     * `Optional.orElse(null)` converts Spring Data's representation into the nullable convention of
-     * the core port; mapping runs only when an entity exists.
+     * `Optional.orElse(null)` convierte la representación de Spring Data en la convención anulable
+     * del puerto central; la asignación solo se ejecuta cuando existe una entidad.
      *
-     * @param paymentId strongly typed domain identifier unwrapped for the JPA query.
-     * @return reconstructed aggregate or `null` when no row exists.
+     * @param paymentId identificador de dominio con tipado fuerte que se desenvuelve para la consulta JPA.
+     * @return agregado reconstruido o `null` cuando no existe ninguna fila.
      */
     @Transactional(readOnly = true)
     override fun findById(paymentId: PaymentId): Payment? =
         repository.findById(paymentId.value).orElse(null)?.let(mapper::toDomain)
 
     /**
-     * Loads the single payment associated with an order's business operation.
+     * Carga el único pago asociado a la operación de negocio de un pedido.
      *
-     * @param orderId business idempotency key unwrapped for the derived Spring Data query.
-     * @return reconstructed aggregate or `null` before the order's first authorization request.
+     * @param orderId clave de idempotencia de negocio que se desenvuelve para la consulta derivada de Spring Data.
+     * @return agregado reconstruido o `null` antes de la primera solicitud de autorización del pedido.
      */
     @Transactional(readOnly = true)
     override fun findByOrderId(orderId: OrderId): Payment? =
         repository.findByOrderId(orderId.value)?.let(mapper::toDomain)
 
     /**
-     * Inserts a new payment or optimistically updates an existing payment snapshot.
+     * Inserta un pago nuevo o actualiza de forma optimista una instantánea de pago existente.
      *
-     * The domain is converted to a detached entity, `saveAndFlush` forces SQL execution immediately,
-     * and the resulting entity is mapped back so callers receive the database-assigned version. The
-     * database unique constraints remain authoritative under concurrency even if application checks
-     * were bypassed.
+     * El dominio se convierte en una entidad separada, `saveAndFlush` fuerza inmediatamente la
+     * ejecución de SQL y la entidad resultante se vuelve a asignar para que los llamadores reciban la
+     * versión asignada por la base de datos. Las restricciones únicas de la base de datos siguen siendo
+     * autoritativas bajo concurrencia aunque se hayan eludido las comprobaciones de la aplicación.
      *
-     * @param payment validated aggregate snapshot.
-     * @return persisted snapshot carrying the new optimistic-lock version.
-     * @throws DuplicatePaymentException when PostgreSQL rejects a uniqueness/integrity conflict.
+     * @param payment instantánea validada del agregado.
+     * @return instantánea conservada que contiene la nueva versión de bloqueo optimista.
+     * @throws DuplicatePaymentException cuando PostgreSQL rechaza un conflicto de unicidad o integridad.
      */
     @Transactional
     override fun save(payment: Payment): Payment = try {
-        // Flushing here keeps constraint errors inside this translation boundary.
+        // Vaciar aquí mantiene los errores de restricciones dentro de este límite de traducción.
         mapper.toDomain(repository.saveAndFlush(mapper.toEntity(payment)))
     } catch (exception: DataIntegrityViolationException) {
-        // Core callers do not need to know which Spring exception represented the database failure.
+        // Los llamadores centrales no necesitan saber qué excepción de Spring representó el fallo de la base de datos.
         throw DuplicatePaymentException(exception)
     }
 }

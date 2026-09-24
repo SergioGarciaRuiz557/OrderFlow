@@ -1,16 +1,16 @@
 package com.orderflow.order.domain.exception;
 
 /**
- * Indicates that a value or requested Order transition violates a domain rule.
+ * Indica que un valor o una transición solicitada de Order infringe una regla del dominio.
  *
- * <p>This exception belongs to the domain and therefore does not prescribe an HTTP status. The REST
- * adapter currently translates it to {@code 422 Unprocessable Entity}.</p>
+ * <p>Esta excepción pertenece al dominio y, por tanto, no prescribe un estado HTTP. El adaptador REST
+ * la traduce actualmente a {@code 422 Unprocessable Entity}.</p>
  */
 public class DomainInvariantViolationException extends RuntimeException {
     /**
-     * Creates a failure containing a safe, business-oriented explanation.
+     * Crea un fallo que contiene una explicación segura y orientada al negocio.
      *
-     * @param message invariant or transition rule that was violated
+     * @param message invariante o regla de transición que se ha infringido
      */
     public DomainInvariantViolationException(String message) {
         super(message);

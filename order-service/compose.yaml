@@ -1,29 +1,29 @@
-# Isolates container, network, and volume names from the other microservice Compose projects.
+# Aísla los nombres de contenedores, redes y volúmenes de los proyectos Compose de los demás microservicios.
 name: orderflow-order
 
 services:
-  # Persistent local-development database used only by Order Service.
+  # Base de datos persistente para desarrollo local utilizada solo por Order Service.
   order-postgres:
-    # Alpine keeps the development image small while retaining standard PostgreSQL behavior.
+    # Alpine mantiene pequeña la imagen de desarrollo sin perder el comportamiento estándar de PostgreSQL.
     image: postgres:17-alpine
-    # These defaults match application.yml and are intended for local development only.
+    # Estos valores predeterminados coinciden con application.yml y están destinados únicamente al desarrollo local.
     environment:
       POSTGRES_DB: orderflow_orders
       POSTGRES_USER: orderflow
       POSTGRES_PASSWORD: orderflow
-    # Inventory owns host port 5432, so Order maps its PostgreSQL port to host port 5433.
+    # Inventory utiliza el puerto 5432 del anfitrión, por lo que Order asigna PostgreSQL al puerto 5433 del anfitrión.
     ports:
       - "5433:5432"
-    # Readiness is based on accepting connections to the expected database as the expected user.
+    # La disponibilidad se comprueba aceptando conexiones a la base de datos esperada con el usuario esperado.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U orderflow -d orderflow_orders"]
       interval: 5s
       timeout: 5s
       retries: 10
-    # The named volume preserves orders when the container itself is recreated.
+    # El volumen con nombre conserva los pedidos cuando se vuelve a crear el contenedor.
     volumes:
       - order-postgres-data:/var/lib/postgresql/data
 
 volumes:
-  # Docker manages the platform-specific storage location behind this stable logical name.
+  # Docker administra la ubicación de almacenamiento específica de la plataforma tras este nombre lógico estable.
   order-postgres-data:

@@ -6,32 +6,32 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-/** Inbound boundary for creating and starting the lifecycle of a local order. */
+/** Límite de entrada para crear e iniciar el ciclo de vida de un pedido local. */
 public interface CreateOrderUseCase {
     /**
-     * Creates, prices, persists, and requests inventory for an order.
+     * Crea, valora y persiste un pedido, y solicita su inventario.
      *
-     * @param command caller data required to create the aggregate
-     * @return representation of the persisted order
+     * @param command datos del consumidor necesarios para crear el agregado
+     * @return representación del pedido persistido
      */
     OrderView create(CreateOrderCommand command);
 
     /**
-     * Immutable application command independent of HTTP request types.
+     * Comando inmutable de la aplicación independiente de los tipos de petición HTTP.
      *
-     * @param customerId customer placing the order
-     * @param items non-empty requested products
-     * @param paymentMethodId payment reference for later authorization
+     * @param customerId cliente que realiza el pedido
+     * @param items productos solicitados; no puede estar vacío
+     * @param paymentMethodId referencia de pago para su posterior autorización
      */
     record CreateOrderCommand(UUID customerId, List<CreateOrderItem> items, String paymentMethodId) {
     }
 
     /**
-     * One primitive application-command line that will be converted to domain value objects.
+     * Una línea primitiva del comando de aplicación que se convertirá en objetos de valor del dominio.
      *
-     * @param productId product catalogue reference
-     * @param quantity requested unit count
-     * @param unitPrice price for one unit
+     * @param productId referencia del catálogo de productos
+     * @param quantity número de unidades solicitado
+     * @param unitPrice precio de una unidad
      */
     record CreateOrderItem(String productId, int quantity, BigDecimal unitPrice) {
     }

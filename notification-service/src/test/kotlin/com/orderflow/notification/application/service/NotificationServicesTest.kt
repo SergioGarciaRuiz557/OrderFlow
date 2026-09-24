@@ -18,78 +18,79 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
- * Unit tests for confirmation and cancellation application-service orchestration.
+ * Pruebas unitarias de la orquestación de los servicios de aplicación de confirmación y cancelación.
  *
- * These tests do not load Spring. The real [OrderNotificationFactory] verifies current deterministic
- * content construction, while a MockK [NotificationSender] isolates external delivery. This keeps
- * the scenarios focused on the application contract: build the right notification, call the output
- * port once, preserve the recipient, and propagate technical failures.
+ * Estas pruebas no cargan Spring. La implementación real de [OrderNotificationFactory] verifica la
+ * construcción determinista actual del contenido, mientras que un [NotificationSender] de MockK
+ * aísla la entrega externa. Así, los escenarios se centran en el contrato de aplicación: construir
+ * la notificación correcta, llamar una vez al puerto de salida, conservar el destinatario y
+ * propagar los fallos técnicos.
  */
 class NotificationServicesTest {
-    /** Mock output port used to observe delivery attempts without producing log or network effects. */
+    /** Puerto de salida simulado para observar intentos de entrega sin generar efectos de log ni de red. */
     private val notificationSender = mockk<NotificationSender>()
 
-    /** Real stateless factory used so tests cover the exact production message content. */
+    /** Factoría real sin estado para que las pruebas cubran el contenido exacto del mensaje de producción. */
     private val notificationFactory = OrderNotificationFactory()
 
     /**
-     * Verifies the complete successful confirmation flow and its generated model.
+     * Verifica el flujo completo de confirmación correcta y el modelo que genera.
      *
-     * The assertion set protects the semantic type, order correlation, and exact deterministic text,
-     * while MockK verifies that delivery is requested exactly once.
+     * El conjunto de aserciones protege el tipo semántico, la correlación del pedido y el texto
+     * determinista exacto, mientras MockK verifica que la entrega se solicite exactamente una vez.
      */
     @Test
-    fun `should send confirmation notification`() {
-        // Arrange: configure the mocked sender to represent a successful Unit-returning delivery.
+    fun `debe enviar la notificación de confirmación`() {
+        // Preparación: configura el emisor simulado para representar una entrega correcta que devuelve Unit.
         every { notificationSender.send(any()) } returns Unit
 
-        // Arrange: the slot captures the actual notification passed through the output port.
+        // Preparación: el slot captura la notificación real que se pasa por el puerto de salida.
         val notification = slot<Notification>()
 
-        // Arrange: instantiate the application service directly with production and test dependencies.
+        // Preparación: instancia directamente el servicio de aplicación con dependencias de producción y prueba.
         val service = SendOrderConfirmedNotificationService(notificationFactory, notificationSender)
 
-        // Act: execute the public input-port operation with validated command values.
+        // Acción: ejecuta la operación pública del puerto de entrada con valores de comando validados.
         service.send(
             SendOrderConfirmedNotificationCommand(
-                // The order id must be preserved structurally and interpolated into the message.
+                // El identificador del pedido debe conservarse estructuralmente e interpolarse en el mensaje.
                 orderId = OrderId("order-123"),
-                // A valid email recipient satisfies the lightweight domain validation.
+                // Un destinatario de correo válido satisface la validación ligera del dominio.
                 recipient = Recipient("customer@example.com"),
             ),
         )
 
-        // Assert: one delivery occurred, and capture its argument for field-level verification.
+        // Verificación: se produjo una entrega y se captura su argumento para comprobar sus campos.
         verify(exactly = 1) { notificationSender.send(capture(notification)) }
 
-        // Assert: the factory classified the message as an order confirmation.
+        // Verificación: la factoría clasificó el mensaje como una confirmación de pedido.
         assertEquals(NotificationType.ORDER_CONFIRMED, notification.captured.type)
 
-        // Assert: the outbound model retains the input command's order identifier.
+        // Verificación: el modelo de salida conserva el identificador de pedido del comando de entrada.
         assertEquals(OrderId("order-123"), notification.captured.orderId)
 
-        // Assert: message wording is deterministic and contains the correct order identifier.
+        // Verificación: el texto del mensaje es determinista y contiene el identificador de pedido correcto.
         assertEquals("Your order order-123 has been confirmed.", notification.captured.message)
     }
 
     /**
-     * Verifies the successful cancellation flow produces cancellation-specific type and content.
+     * Verifica que el flujo correcto de cancelación produzca el tipo y contenido propios de la cancelación.
      *
-     * This separate scenario prevents confirmation wording or classification from being reused
-     * accidentally for an `OrderCancelledEvent`.
+     * Este escenario separado evita que el texto o la clasificación de confirmación se reutilicen
+     * por accidente para un `OrderCancelledEvent`.
      */
     @Test
-    fun `should send cancellation notification`() {
-        // Arrange: a normal return from the mocked sender represents successful delivery.
+    fun `debe enviar la notificación de cancelación`() {
+        // Preparación: un retorno normal del emisor simulado representa una entrega correcta.
         every { notificationSender.send(any()) } returns Unit
 
-        // Arrange: capture the exact model submitted by the cancellation service.
+        // Preparación: captura el modelo exacto que envía el servicio de cancelación.
         val notification = slot<Notification>()
 
-        // Arrange: assemble the unit under test without starting the Spring container.
+        // Preparación: construye la unidad bajo prueba sin iniciar el contenedor de Spring.
         val service = SendOrderCancelledNotificationService(notificationFactory, notificationSender)
 
-        // Act: submit a cancellation command through the service's input-port implementation.
+        // Acción: envía un comando de cancelación mediante la implementación del puerto de entrada del servicio.
         service.send(
             SendOrderCancelledNotificationCommand(
                 orderId = OrderId("order-456"),
@@ -97,79 +98,81 @@ class NotificationServicesTest {
             ),
         )
 
-        // Assert: the output port is called once and its argument is available in the slot.
+        // Verificación: el puerto de salida se llama una vez y su argumento queda disponible en el slot.
         verify(exactly = 1) { notificationSender.send(capture(notification)) }
 
-        // Assert: cancellation remains semantically distinct from confirmation.
+        // Verificación: la cancelación se mantiene semánticamente diferenciada de la confirmación.
         assertEquals(NotificationType.ORDER_CANCELLED, notification.captured.type)
 
-        // Assert: the application preserves the cancelled order's identifier.
+        // Verificación: la aplicación conserva el identificador del pedido cancelado.
         assertEquals(OrderId("order-456"), notification.captured.orderId)
 
-        // Assert: deterministic cancellation text contains the correct identifier and state.
+        // Verificación: el texto determinista de cancelación contiene el identificador y estado correctos.
         assertEquals("Your order order-456 has been cancelled.", notification.captured.message)
     }
 
     /**
-     * Verifies that the intended customer is preserved across command-to-notification mapping.
+     * Verifica que se conserve el cliente previsto durante el mapeo de comando a notificación.
      *
-     * Recipient correctness is tested explicitly because delivering valid content to the wrong
-     * address would be a critical application failure even when all other fields are correct.
+     * Se comprueba explícitamente que el destinatario sea correcto porque entregar contenido válido
+     * en una dirección equivocada sería un fallo crítico de la aplicación, aunque los demás campos
+     * fueran correctos.
      */
     @Test
-    fun `should invoke notification sender with expected recipient`() {
-        // Arrange: allow any notification to be sent successfully by the mock.
+    fun `debe invocar el emisor de notificaciones con el destinatario esperado`() {
+        // Preparación: permite que la simulación envíe correctamente cualquier notificación.
         every { notificationSender.send(any()) } returns Unit
 
-        // Arrange: keep one typed recipient instance as the expected destination.
+        // Preparación: conserva una instancia tipada del destinatario como destino esperado.
         val expectedRecipient = Recipient("expected@example.com")
 
-        // Arrange: use the confirmation workflow; recipient mapping is shared by both flows.
+        // Preparación: usa el flujo de confirmación; ambos flujos comparten el mapeo del destinatario.
         val service = SendOrderConfirmedNotificationService(notificationFactory, notificationSender)
 
-        // Act: request delivery to the expected address.
+        // Acción: solicita la entrega en la dirección esperada.
         service.send(SendOrderConfirmedNotificationCommand(OrderId("order-789"), expectedRecipient))
 
-        // Assert: exactly one outbound call contains that same typed recipient value.
+        // Verificación: exactamente una llamada de salida contiene ese mismo valor tipado de destinatario.
         verify(exactly = 1) {
             notificationSender.send(match { it.recipient == expectedRecipient })
         }
     }
 
     /**
-     * Verifies that a sender outage remains a notification-specific technical failure.
+     * Verifica que una caída del emisor siga siendo un fallo técnico específico de notificaciones.
      *
-     * The application must not swallow the exception or turn it into an order-domain result. Exact
-     * instance comparison proves that the original failure is propagated unchanged, preserving its
-     * message, cause, and future diagnostic context for an asynchronous retry mechanism.
+     * La aplicación no debe silenciar la excepción ni convertirla en un resultado del dominio de
+     * pedidos. La comparación exacta de la instancia demuestra que el fallo original se propaga sin
+     * cambios y conserva su mensaje, causa y futuro contexto de diagnóstico para un mecanismo de
+     * reintento asíncrono.
      */
     @Test
-    fun `should propagate sender technical failure`() {
-        // Arrange: create the precise failure that the mocked outbound adapter will report.
+    fun `debe propagar el fallo técnico del emisor`() {
+        // Preparación: crea el fallo exacto que notificará el adaptador de salida simulado.
         val failure = NotificationDeliveryException("provider unavailable")
 
-        // Arrange: configure every delivery attempt to throw rather than return successfully.
+        // Preparación: configura cada intento de entrega para que lance una excepción en vez de retornar.
         every { notificationSender.send(any()) } throws failure
 
-        // Arrange: cancellation is sufficient to verify the shared propagation policy.
+        // Preparación: la cancelación basta para verificar la política de propagación compartida.
         val service = SendOrderCancelledNotificationService(notificationFactory, notificationSender)
 
-        // Act and assert: execute the use case and capture its expected technical exception.
+        // Acción y verificación: ejecuta el caso de uso y captura la excepción técnica esperada.
         val thrown = assertThrows(NotificationDeliveryException::class.java) {
             service.send(
                 SendOrderCancelledNotificationCommand(
-                    // A valid order ensures the scenario reaches the sender rather than failing validation.
+                    // Un pedido válido garantiza que el escenario alcance el emisor sin fallar en la validación.
                     OrderId("order-technical-failure"),
-                    // A valid recipient likewise keeps the test focused on outbound failure behavior.
+                    // Un destinatario válido mantiene también la prueba centrada en el fallo de salida.
                     Recipient("customer@example.com"),
                 ),
             )
         }
 
-        // Assert: the application rethrows the original adapter failure without wrapping or replacing it.
+        // Verificación: la aplicación relanza el fallo original del adaptador sin envolverlo ni sustituirlo.
         assertSame(failure, thrown)
 
-        // Assert: exactly one delivery was attempted before the technical failure escaped.
+        // Verificación: se intentó exactamente una entrega antes de que se propagara el fallo técnico.
         verify(exactly = 1) { notificationSender.send(any()) }
     }
 }

@@ -1,21 +1,21 @@
 spring:
-  # Logical application name used in logs and Spring infrastructure.
+  # Nombre lógico de la aplicación utilizado en los registros y en la infraestructura de Spring.
   application:
     name: order-service
-  # Explicit local connection keeps this service independent from Docker Compose auto-discovery.
-  # Environment variables allow deployment platforms to supply managed PostgreSQL credentials.
+  # La conexión local explícita mantiene este servicio independiente del descubrimiento automático de Docker Compose.
+  # Las variables de entorno permiten que las plataformas de despliegue proporcionen credenciales administradas de PostgreSQL.
   datasource:
     url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5433/orderflow_orders}
     username: ${ORDER_DB_USERNAME:orderflow}
     password: ${ORDER_DB_PASSWORD:orderflow}
   jpa:
     hibernate:
-      # Flyway owns schema changes; Hibernate only verifies entity/schema compatibility.
+      # Flyway gestiona los cambios del esquema; Hibernate solo verifica la compatibilidad entre entidades y esquema.
       ddl-auto: validate
-    # Prevents lazy database access from leaking beyond the transactional application boundary.
+    # Evita que el acceso diferido a la base de datos se extienda más allá del límite transaccional de la aplicación.
     open-in-view: false
   flyway:
-    # Applies versioned classpath migrations before Hibernate validates its mappings.
+    # Aplica las migraciones versionadas del classpath antes de que Hibernate valide sus mapeos.
     enabled: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -39,5 +39,5 @@ orderflow:
       payment-events: ${ORDER_PAYMENT_EVENTS_GROUP:order-service.payment-events}
 
 server:
-  # Order uses a dedicated HTTP port by default and remains configurable in deployment.
+  # Order utiliza de forma predeterminada un puerto HTTP dedicado que sigue siendo configurable durante el despliegue.
   port: ${ORDER_SERVICE_PORT:8081}

@@ -5,11 +5,11 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Terminal cancellation fact produced after rejection or completed compensation.
+ * Hecho terminal de cancelación producido después de un rechazo o de completar la compensación.
  *
- * @param orderId cancelled aggregate
- * @param reason normalized cancellation reason
- * @param occurredAt cancellation time
+ * @param orderId agregado cancelado
+ * @param reason motivo de cancelación normalizado
+ * @param occurredAt instante de cancelación
  */
 public record OrderCancelled(OrderId orderId, String reason, Instant occurredAt) implements OrderDomainEvent {
 }

@@ -20,65 +20,65 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Mutable JPA representation of the {@code orders} table.
+ * Representación JPA mutable de la tabla {@code orders}.
  *
- * <p>This is deliberately not the domain aggregate. Its shape and mutability satisfy persistence
- * concerns, while {@link OrderPersistenceMapper} protects the application from JPA types.</p>
+ * <p>Deliberadamente, no es el agregado del dominio. Su forma y mutabilidad satisfacen las necesidades de
+ * persistencia, mientras que {@link OrderPersistenceMapper} protege la aplicación de los tipos JPA.</p>
  */
 @Entity
 @Table(name = "orders")
 public class JpaOrderEntity {
-    /** Domain-assigned UUID primary key. */
+    /** Clave primaria UUID asignada por el dominio. */
     @Id
     private UUID id;
 
-    /** Customer reference stored as a scalar UUID. */
+    /** Referencia del cliente almacenada como UUID escalar. */
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
 
-    /** Persisted enum name; transitions remain controlled by the domain aggregate. */
+    /** Nombre persistido del enum; las transiciones permanecen bajo el control del agregado del dominio. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private OrderStatus status;
 
-    /** Opaque payment reference required to resume the workflow after restart. */
+    /** Referencia de pago opaca necesaria para reanudar el flujo de trabajo después de un reinicio. */
     @Column(name = "payment_method_id", nullable = false)
     private String paymentMethodId;
 
-    /** Denormalized aggregate total, verified against lines during rehydration. */
+    /** Total desnormalizado del agregado, verificado con las líneas durante la rehidratación. */
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal total;
 
-    /** ISO currency code accompanying the total. */
+    /** Código ISO de la divisa que acompaña al total. */
     @Column(nullable = false, length = 3)
     private String currency;
 
-    /** Immutable aggregate creation time. */
+    /** Instante inmutable de creación del agregado. */
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    /** Time of the most recent accepted lifecycle transition. */
+    /** Instante de la transición aceptada más reciente del ciclo de vida. */
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    /** Version incremented by Hibernate to reject stale concurrent writes. */
+    /** Versión que Hibernate incrementa para rechazar escrituras concurrentes obsoletas. */
     @Version
     @Column(nullable = false)
     private Long version;
 
     /**
-     * Child rows owned by this aggregate persistence record.
-     * Eager loading allows the adapter to reconstruct a complete aggregate at its boundary.
+     * Filas hijas que pertenecen a este registro de persistencia del agregado.
+     * La carga inmediata permite que el adaptador reconstruya un agregado completo en su límite.
      */
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("id ASC")
     private List<JpaOrderLineEntity> lines = new ArrayList<>();
 
-    /** Required by JPA; production code creates entities through the persistence mapper. */
+    /** Requerido por JPA; el código de producción crea entidades mediante el mapeador de persistencia. */
     protected JpaOrderEntity() {
     }
 
-    /** Creates a persistence record from explicit aggregate state. */
+    /** Crea un registro de persistencia a partir del estado explícito del agregado. */
     JpaOrderEntity(UUID id, UUID customerId, OrderStatus status, String paymentMethodId,
                    BigDecimal total, String currency, Instant createdAt, Instant updatedAt, Long version) {
         this.id = id;
@@ -93,33 +93,33 @@ public class JpaOrderEntity {
     }
 
     /**
-     * Maintains both sides of the JPA association before cascading persistence.
+     * Mantiene ambos lados de la asociación JPA antes de propagar la persistencia en cascada.
      *
-     * @param line child persistence entity to attach
+     * @param line entidad hija de persistencia que se adjuntará
      */
     void addLine(JpaOrderLineEntity line) {
         lines.add(line);
         line.attachTo(this);
     }
 
-    /** Returns the primary key. @return stored aggregate UUID */
+    /** Devuelve la clave primaria. @return UUID almacenado del agregado */
     UUID id() { return id; }
-    /** Returns the customer column. @return stored customer UUID */
+    /** Devuelve la columna del cliente. @return UUID almacenado del cliente */
     UUID customerId() { return customerId; }
-    /** Returns the status column. @return stored lifecycle state */
+    /** Devuelve la columna de estado. @return estado almacenado del ciclo de vida */
     OrderStatus status() { return status; }
-    /** Returns the payment reference column. @return stored payment reference */
+    /** Devuelve la columna de referencia de pago. @return referencia de pago almacenada */
     String paymentMethodId() { return paymentMethodId; }
-    /** Returns the total column. @return stored aggregate total */
+    /** Devuelve la columna del total. @return total almacenado del agregado */
     BigDecimal total() { return total; }
-    /** Returns the currency column. @return stored total currency */
+    /** Devuelve la columna de divisa. @return divisa almacenada del total */
     String currency() { return currency; }
-    /** Returns the creation column. @return stored creation time */
+    /** Devuelve la columna de creación. @return instante de creación almacenado */
     Instant createdAt() { return createdAt; }
-    /** Returns the latest-update column. @return stored latest-update time */
+    /** Devuelve la columna de última actualización. @return instante almacenado de la última actualización */
     Instant updatedAt() { return updatedAt; }
-    /** Returns the concurrency column. @return current optimistic-lock version */
+    /** Devuelve la columna de concurrencia. @return versión actual de bloqueo optimista */
     Long version() { return version; }
-    /** Returns attached children without exposing mutable storage. @return immutable line view */
+    /** Devuelve las entidades hijas adjuntas sin exponer almacenamiento mutable. @return vista inmutable de las líneas */
     List<JpaOrderLineEntity> lines() { return List.copyOf(lines); }
 }

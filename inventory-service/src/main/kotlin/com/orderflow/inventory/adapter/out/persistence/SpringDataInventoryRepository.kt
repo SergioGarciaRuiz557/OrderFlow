@@ -5,21 +5,22 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 /**
- * Internal Spring Data repository for inventory persistence entities.
+ * Repositorio interno de Spring Data para las entidades de persistencia del inventario.
  *
- * This interface is an implementation detail of [JpaInventoryRepositoryAdapter] and must not be
- * injected into application or domain code. Custom fetch queries guarantee that mapping receives
- * the complete reservation collection needed to rebuild a valid aggregate.
+ * Esta interfaz es un detalle de implementación de [JpaInventoryRepositoryAdapter] y no debe
+ * inyectarse en el código de aplicación ni de dominio. Las consultas de recuperación personalizadas
+ * garantizan que el mapeo reciba la colección completa de reservas necesaria para reconstruir un
+ * agregado válido.
  */
 interface SpringDataInventoryRepository : JpaRepository<InventoryItemJpaEntity, String> {
     /**
-     * Fetches one inventory entity and all owned reservations by product primary key.
+     * Recupera una entidad de inventario y todas sus reservas mediante la clave primaria del producto.
      *
-     * `distinct` removes duplicate parent results produced by the collection join while `left join`
-     * still returns inventory that has no reservations.
+     * `distinct` elimina los resultados duplicados de la entidad padre producidos por el join de la
+     * colección, mientras que `left join` sigue devolviendo inventarios sin reservas.
      *
-     * @param productId string primary key stored in `inventory_items`.
-     * @return entity graph for the product, or `null` when absent.
+     * @param productId clave primaria String almacenada en `inventory_items`.
+     * @return grafo de entidades del producto, o `null` cuando no existe.
      */
     @Query(
         """
@@ -32,14 +33,14 @@ interface SpringDataInventoryRepository : JpaRepository<InventoryItemJpaEntity, 
     fun findAggregateByProductId(@Param("productId") productId: String): InventoryItemJpaEntity?
 
     /**
-     * Fetches the complete owning aggregate for a reservation identifier.
+     * Recupera el agregado propietario completo mediante un identificador de reserva.
      *
-     * The subquery first resolves the owning product. The outer left fetch join then loads every
-     * reservation for that product rather than only the matching child, which is essential for
-     * aggregate invariants and duplicate-order checks.
+     * La subconsulta resuelve primero el producto propietario. A continuación, el left fetch join
+     * externo carga todas las reservas de ese producto, no solo la entidad hija coincidente, lo que
+     * resulta esencial para las invariantes del agregado y las comprobaciones de pedidos duplicados.
      *
-     * @param reservationId UUID primary key stored in `stock_reservations`.
-     * @return complete owning entity graph, or `null` when no reservation matches.
+     * @param reservationId clave primaria UUID almacenada en `stock_reservations`.
+     * @return grafo completo de la entidad propietaria, o `null` cuando no coincide ninguna reserva.
      */
     @Query(
         """

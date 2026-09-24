@@ -14,18 +14,19 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * JPA representation of the `inventory_items` table.
+ * Representación JPA de la tabla `inventory_items`.
  *
- * This mutable class exists only in the persistence adapter. It is deliberately separate from the
- * immutable [com.orderflow.inventory.domain.model.InventoryItem] aggregate so Hibernate's proxy,
- * no-argument-constructor, and mutable-property requirements do not shape the domain model.
+ * Esta clase mutable solo existe en el adaptador de persistencia. Está separada deliberadamente del
+ * agregado inmutable [com.orderflow.inventory.domain.model.InventoryItem] para que los requisitos de
+ * Hibernate sobre proxies, constructores sin argumentos y propiedades mutables no den forma al modelo de dominio.
  *
- * @property productId assigned product primary key; it never changes after insertion.
- * @property availableQuantity persisted stock available to new reservations.
- * @property version Hibernate optimistic-lock token. `null` identifies a new entity; PostgreSQL and
- * Hibernate assign the first version during insertion.
- * @property reservations child rows owned by this persistence aggregate. Cascades make stock and
- * reservation changes part of the same persistence operation, and orphan removal mirrors ownership.
+ * @property productId clave primaria asignada al producto; nunca cambia después de la inserción.
+ * @property availableQuantity existencias persistidas disponibles para nuevas reservas.
+ * @property version token de bloqueo optimista de Hibernate. `null` identifica una entidad nueva;
+ * PostgreSQL e Hibernate asignan la primera versión durante la inserción.
+ * @property reservations filas hijas que pertenecen a este agregado de persistencia. Las cascadas
+ * hacen que los cambios de existencias y reservas formen parte de la misma operación de persistencia,
+ * y la eliminación de huérfanos refleja la propiedad.
  */
 @Entity
 @Table(name = "inventory_items")
@@ -46,18 +47,19 @@ class InventoryItemJpaEntity(
 )
 
 /**
- * JPA representation of the `stock_reservations` table.
+ * Representación JPA de la tabla `stock_reservations`.
  *
- * Values that define reservation identity and intent are immutable at the database-mapping level;
- * only lifecycle status and release time can change. Domain validation still occurs in the separate
- * domain model when rows are reconstructed.
+ * Los valores que definen la identidad y la intención de la reserva son inmutables en el nivel de
+ * mapeo de la base de datos; solo pueden cambiar el estado del ciclo de vida y el instante de
+ * liberación. La validación del dominio sigue realizándose en el modelo de dominio independiente
+ * cuando se reconstruyen las filas.
  *
- * @property reservationId UUID primary key of the reservation row.
- * @property orderId order-level business idempotency key within a product.
- * @property quantity units allocated by this reservation.
- * @property status persisted name of the domain reservation status.
- * @property reservedAt immutable acceptance timestamp.
- * @property releasedAt release timestamp, or `null` for an active row.
+ * @property reservationId UUID que actúa como clave primaria de la fila de reserva.
+ * @property orderId clave de idempotencia de negocio del pedido dentro de un producto.
+ * @property quantity unidades asignadas por esta reserva.
+ * @property status nombre persistido del estado de reserva del dominio.
+ * @property reservedAt marca temporal inmutable de aceptación.
+ * @property releasedAt marca temporal de liberación, o `null` para una fila activa.
  */
 @Entity
 @Table(name = "stock_reservations")
@@ -82,12 +84,12 @@ class StockReservationJpaEntity(
     var releasedAt: Instant? = null,
 ) {
     /**
-     * Owning inventory persistence entity.
+     * Entidad de persistencia de inventario propietaria.
      *
-     * The association writes the `product_id` foreign key. Lazy loading avoids loading the parent
-     * again when a child is already traversed from an eagerly fetched aggregate. The mapper assigns
-     * this `lateinit` property before a new entity graph is persisted; Hibernate assigns it when
-     * hydrating database rows.
+     * La asociación escribe la clave externa `product_id`. La carga diferida evita volver a cargar
+     * la entidad padre cuando ya se accede a una hija desde un agregado recuperado de forma inmediata.
+     * El mapeador asigna esta propiedad `lateinit` antes de persistir un nuevo grafo de entidades;
+     * Hibernate la asigna al hidratar las filas de la base de datos.
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "product_id", nullable = false, updatable = false)

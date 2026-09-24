@@ -10,42 +10,43 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Mutable JPA representation of one row in the `payments` table.
+ * Representación JPA mutable de una fila de la tabla `payments`.
  *
- * This class exists only in the persistence adapter. Hibernate requires a no-argument-compatible
- * constructor, mutable properties, and mapping annotations, so the entity is deliberately separate
- * from the immutable [com.orderflow.payment.domain.model.Payment] aggregate. Application and domain
- * code must never use this type directly.
+ * Esta clase solo existe en el adaptador de persistencia. Hibernate requiere un constructor compatible
+ * sin argumentos, propiedades mutables y anotaciones de asignación, por lo que la entidad está
+ * deliberadamente separada del agregado inmutable [com.orderflow.payment.domain.model.Payment]. El
+ * código de aplicación y dominio nunca debe usar directamente este tipo.
  *
- * Constructor defaults are infrastructure placeholders used by Hibernate's generated no-arg
- * constructor; real writes are populated by [PaymentPersistenceMapper]. Database `NOT NULL`, check,
- * and uniqueness constraints remain the final persistence safety net.
+ * Los valores predeterminados del constructor son marcadores de infraestructura que usa el constructor
+ * sin argumentos generado por Hibernate; [PaymentPersistenceMapper] rellena las escrituras reales.
+ * Las restricciones `NOT NULL`, de comprobación y de unicidad de la base de datos siguen siendo la
+ * última red de seguridad de la persistencia.
  *
- * @property paymentId UUID primary key; immutable after insertion.
- * @property orderId unique business authorization key; immutable after insertion.
- * @property amount decimal amount stored at precision 19 and scale 2.
- * @property currency explicit three-character ISO currency code.
- * @property paymentMethodId opaque payment-instrument token fixed for the payment request.
- * @property status persisted name of the domain lifecycle state.
- * @property providerReference provider reference, nullable except for authorized state.
- * @property failureReason business rejection code, nullable except for rejected state.
- * @property createdAt immutable creation instant.
- * @property updatedAt latest lifecycle transition instant.
- * @property version Hibernate optimistic-lock token; `null` marks a new entity.
+ * @property paymentId clave primaria UUID, inmutable tras la inserción.
+ * @property orderId clave única de autorización de negocio, inmutable tras la inserción.
+ * @property amount importe decimal almacenado con precisión 19 y escala 2.
+ * @property currency código de moneda ISO explícito de tres caracteres.
+ * @property paymentMethodId token opaco del instrumento de pago fijado para la solicitud de pago.
+ * @property status nombre conservado del estado del ciclo de vida del dominio.
+ * @property providerReference referencia del proveedor, anulable salvo en el estado autorizado.
+ * @property failureReason código de rechazo de negocio, anulable salvo en el estado rechazado.
+ * @property createdAt instante inmutable de creación.
+ * @property updatedAt instante de la última transición del ciclo de vida.
+ * @property version token de bloqueo optimista de Hibernate; `null` señala una entidad nueva.
  */
 @Entity
 @Table(name = "payments")
 class PaymentJpaEntity(
-    // `@Id` maps the aggregate identity; `updatable = false` prevents accidental key replacement.
+    // `@Id` asigna la identidad del agregado; `updatable = false` evita la sustitución accidental de la clave.
     @Id
     @Column(name = "payment_id", nullable = false, updatable = false)
     var paymentId: UUID = UUID.randomUUID(),
 
-    // The migration also declares a UNIQUE constraint because this is the business idempotency key.
+    // La migración también declara una restricción UNIQUE porque esta es la clave de idempotencia de negocio.
     @Column(name = "order_id", nullable = false, updatable = false)
     var orderId: String = "",
 
-    // JPA precision and scale mirror PostgreSQL NUMERIC(19, 2) and the Money normalization policy.
+    // La precisión y escala de JPA reflejan NUMERIC(19, 2) de PostgreSQL y la política de normalización de Money.
     @Column(name = "amount", nullable = false, updatable = false, precision = 19, scale = 2)
     var amount: BigDecimal = BigDecimal.ZERO.setScale(2),
 
@@ -55,7 +56,7 @@ class PaymentJpaEntity(
     @Column(name = "payment_method_id", nullable = false, updatable = false)
     var paymentMethodId: String = "",
 
-    // Strings keep JPA storage decoupled from enum ordinal ordering; the mapper validates the name.
+    // Las cadenas desacoplan el almacenamiento JPA del orden ordinal del enum; el asignador valida el nombre.
     @Column(name = "status", nullable = false)
     var status: String = "",
 
@@ -71,7 +72,7 @@ class PaymentJpaEntity(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.EPOCH,
 
-    // Hibernate includes this value in UPDATE predicates and detects stale concurrent snapshots.
+    // Hibernate incluye este valor en los predicados UPDATE y detecta instantáneas concurrentes obsoletas.
     @Version
     @Column(name = "version", nullable = false)
     var version: Long? = null,

@@ -6,156 +6,162 @@ import java.util.Currency
 import java.util.UUID
 
 /**
- * Strongly typed identifier of a [Payment] aggregate.
+ * Identificador con tipado fuerte de un agregado [Payment].
  *
- * Wrapping the raw [UUID] prevents payment identifiers from being accidentally exchanged with
- * order identifiers or other strings. `@JvmInline` normally avoids allocating an extra wrapper at
- * runtime while retaining domain-specific type safety in Kotlin APIs.
+ * Encapsular el [UUID] sin procesar evita que los identificadores de pago se confundan por accidente
+ * con identificadores de pedido u otras cadenas. `@JvmInline` suele evitar la asignación de un
+ * envoltorio adicional en tiempo de ejecución y mantiene la seguridad de tipos específica del dominio
+ * en las API de Kotlin.
  *
- * @property value globally unique UUID stored as the `payments.payment_id` primary key.
+ * @property value UUID único globalmente que se almacena como clave primaria `payments.payment_id`.
  */
 @JvmInline
 value class PaymentId(val value: UUID) {
-    /** Factory operations for payment identifiers. */
+    /** Operaciones de fábrica para identificadores de pago. */
     companion object {
         /**
-         * Creates a new random identifier for a payment that has not yet been persisted.
+         * Crea un identificador aleatorio para un pago que todavía no se ha conservado.
          *
-         * Retries of an existing payment do not call this method: they reload the original aggregate
-         * and keep its identifier. Provider idempotency uses [OrderId], so it also remains stable if
-         * local persistence fails before a newly generated identifier can be stored.
+         * Los reintentos de un pago existente no llaman a este método: vuelven a cargar el agregado
+         * original y conservan su identificador. La idempotencia del proveedor usa [OrderId], por lo
+         * que también permanece estable si la persistencia local falla antes de poder almacenar un
+         * identificador recién generado.
          */
         fun new(): PaymentId = PaymentId(UUID.randomUUID())
     }
 }
 
 /**
- * Identifier assigned by the Order bounded context to the business operation being paid.
+ * Identificador que el contexto delimitado de Pedidos asigna a la operación de negocio que se paga.
  *
- * This is more than a foreign reference: it is the business idempotency key for authorization. A
- * single order can own only one payment row, and the same value is sent to the payment gateway as
- * its idempotency key.
+ * Es más que una referencia externa: constituye la clave de idempotencia de negocio para la
+ * autorización. Un pedido solo puede poseer una fila de pago y se envía el mismo valor a la pasarela
+ * de pago como clave de idempotencia.
  *
- * @property value external order identifier, preserved without transformation.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value identificador externo del pedido, conservado sin transformación.
+ * @throws IllegalArgumentException cuando [value] está en blanco.
  */
 @JvmInline
 value class OrderId(val value: String) {
-    /** Rejects identifiers that cannot identify a real order. */
+    /** Rechaza los identificadores que no pueden identificar un pedido real. */
     init {
         require(value.isNotBlank()) { "Order id must not be blank" }
     }
 }
 
 /**
- * Opaque identifier of the customer's payment instrument at the provider.
+ * Identificador opaco del instrumento de pago del cliente en el proveedor.
  *
- * The service never parses card or bank details from this value. Keeping the token opaque limits
- * the bounded context to authorization orchestration and avoids storing sensitive instrument data.
+ * El servicio nunca analiza datos de tarjeta o bancarios a partir de este valor. Mantener el token
+ * opaco limita el contexto delimitado a coordinar la autorización y evita almacenar datos
+ * confidenciales del instrumento.
  *
- * @property value provider-facing payment-method token.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value token del método de pago dirigido al proveedor.
+ * @throws IllegalArgumentException cuando [value] está en blanco.
  */
 @JvmInline
 value class PaymentMethodId(val value: String) {
-    /** Ensures every authorization request identifies a payment instrument. */
+    /** Garantiza que cada solicitud de autorización identifique un instrumento de pago. */
     init {
         require(value.isNotBlank()) { "Payment method id must not be blank" }
     }
 }
 
 /**
- * Reference returned by the payment provider after a successful authorization.
+ * Referencia que devuelve el proveedor de pagos tras una autorización satisfactoria.
  *
- * The reference is stored for traceability, support investigations, reconciliation, and future
- * capture/refund operations. Domain and database invariants allow it only on `AUTHORIZED` payments.
+ * La referencia se almacena para aportar trazabilidad, facilitar investigaciones de soporte, realizar
+ * conciliaciones y permitir futuras operaciones de captura o reembolso. Los invariantes del dominio
+ * y de la base de datos solo la permiten en pagos `AUTHORIZED`.
  *
- * @property value opaque provider authorization reference.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value referencia opaca de autorización del proveedor.
+ * @throws IllegalArgumentException cuando [value] está en blanco.
  */
 @JvmInline
 value class PaymentProviderReference(val value: String) {
-    /** Prevents successful payments from carrying an unusable provider reference. */
+    /** Evita que los pagos satisfactorios contengan una referencia de proveedor inutilizable. */
     init {
         require(value.isNotBlank()) { "Payment provider reference must not be blank" }
     }
 }
 
 /**
- * Machine-readable reason for a known business rejection.
+ * Motivo legible por máquina para un rechazo de negocio conocido.
  *
- * This type is deliberately not used for timeouts, connection errors, or other technical failures;
- * those cross the [com.orderflow.payment.application.port.out.PaymentGatewayException] boundary.
- * Keeping the two concepts separate lets a future Kafka consumer retry technical failures without
- * treating them as card declines.
+ * Este tipo no se usa deliberadamente para tiempos de espera agotados, errores de conexión u otros
+ * fallos técnicos; estos atraviesan el límite
+ * [com.orderflow.payment.application.port.out.PaymentGatewayException]. Mantener separados ambos
+ * conceptos permite que un futuro consumidor de Kafka reintente los fallos técnicos sin tratarlos
+ * como rechazos de tarjeta.
  *
- * @property value stable reason code supplied or mapped by the gateway adapter.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value código de motivo estable proporcionado o asignado por el adaptador de la pasarela.
+ * @throws IllegalArgumentException cuando [value] está en blanco.
  */
 @JvmInline
 value class PaymentFailureReason(val value: String) {
-    /** Guarantees that every rejected payment explains its business outcome. */
+    /** Garantiza que cada pago rechazado explique su resultado de negocio. */
     init {
         require(value.isNotBlank()) { "Payment failure reason must not be blank" }
     }
 }
 
 /**
- * Immutable monetary value used by the Payment domain.
+ * Valor monetario inmutable que utiliza el dominio de Pagos.
  *
- * [BigDecimal] is mandatory for decimal currency arithmetic; binary floating-point types would
- * introduce rounding errors. Construction is private so all values pass through [euros] or [of],
- * which normalize the amount to exactly two decimal places. The first service version accepts EUR
- * only, but currency remains explicit to prevent ambiguous amounts and ease future extension.
+ * [BigDecimal] es obligatorio para la aritmética monetaria decimal, pues los tipos binarios de coma
+ * flotante introducirían errores de redondeo. La construcción es privada para que todos los valores
+ * pasen por [euros] u [of], que normalizan el importe a exactamente dos decimales. La primera versión
+ * del servicio solo acepta EUR, pero la moneda se mantiene explícita para evitar importes ambiguos y
+ * facilitar ampliaciones futuras.
  *
- * @property amount non-negative decimal amount normalized to two fractional digits.
- * @property currency ISO-4217 currency; currently it must be EUR.
- * @throws IllegalArgumentException for a negative amount, unsupported currency, or invalid scale.
- * @throws ArithmeticException when normalization would require rounding rather than adding zeros.
+ * @property amount importe decimal no negativo normalizado a dos dígitos fraccionarios.
+ * @property currency moneda ISO-4217; actualmente debe ser EUR.
+ * @throws IllegalArgumentException ante un importe negativo, una moneda no admitida o una escala no válida.
+ * @throws ArithmeticException cuando la normalización requeriría redondear en lugar de añadir ceros.
  */
 @ConsistentCopyVisibility
 data class Money private constructor(
     val amount: BigDecimal,
     val currency: Currency,
 ) {
-    /** Revalidates all invariants for every instance, including generated data-class copies. */
+    /** Vuelve a validar todos los invariantes de cada instancia, incluidas las copias generadas de la clase de datos. */
     init {
-        // `signum` compares numerically and is not affected by BigDecimal scale.
+        // `signum` compara numéricamente y no se ve afectado por la escala de BigDecimal.
         require(amount.signum() >= 0) { "Payment amount cannot be negative" }
         require(currency == EUR) { "Only EUR is currently supported" }
         require(amount.scale() == SCALE) { "Payment amount must use two decimal places" }
     }
 
-    /** Controlled construction and normalization policy for monetary values. */
+    /** Política controlada de construcción y normalización de valores monetarios. */
     companion object {
-        /** Number of decimal places used by EUR and by the PostgreSQL `NUMERIC(19, 2)` column. */
+        /** Número de decimales que usan EUR y la columna `NUMERIC(19, 2)` de PostgreSQL. */
         private const val SCALE = 2
 
-        /** Canonical Java currency instance used for all currently supported payments. */
+        /** Instancia canónica de moneda de Java que usan todos los pagos admitidos actualmente. */
         val EUR: Currency = Currency.getInstance("EUR")
 
         /**
-         * Creates an EUR amount and normalizes values such as `10` or `10.0` to `10.00`.
+         * Crea un importe en EUR y normaliza valores como `10` o `10.0` a `10.00`.
          *
-         * @param amount decimal amount that must be non-negative and exactly representable at scale 2.
-         * @return validated EUR money.
+         * @param amount importe decimal que debe ser no negativo y representable exactamente con escala 2.
+         * @return valor monetario en EUR validado.
          */
         fun euros(amount: BigDecimal): Money = Money(normalize(amount), EUR)
 
         /**
-         * Reconstructs money when the currency is supplied explicitly, primarily from persistence.
+         * Reconstruye el valor monetario cuando la moneda se proporciona explícitamente, principalmente desde persistencia.
          *
-         * @param amount stored or externally supplied decimal amount.
-         * @param currency explicit ISO-4217 currency to validate.
-         * @return normalized and validated money.
+         * @param amount importe decimal almacenado o proporcionado externamente.
+         * @param currency moneda ISO-4217 explícita que se debe validar.
+         * @return valor monetario normalizado y validado.
          */
         fun of(amount: BigDecimal, currency: Currency): Money = Money(normalize(amount), currency)
 
         /**
-         * Enforces the common scale without silently changing monetary value.
+         * Aplica la escala común sin cambiar silenciosamente el valor monetario.
          *
-         * [RoundingMode.UNNECESSARY] accepts `10`, `10.0`, and `10.00`, but rejects `10.001` rather
-         * than rounding a business amount behind the caller's back.
+         * [RoundingMode.UNNECESSARY] acepta `10`, `10.0` y `10.00`, pero rechaza `10.001` en lugar
+         * de redondear un importe de negocio a espaldas del llamador.
          */
         private fun normalize(amount: BigDecimal): BigDecimal =
             amount.setScale(SCALE, RoundingMode.UNNECESSARY)

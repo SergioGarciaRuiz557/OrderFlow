@@ -26,7 +26,7 @@ class NotificationKafkaIntegrationTest {
     @MockitoBean lateinit var confirmed: SendOrderConfirmedNotificationUseCase
     @MockitoBean lateinit var cancelled: SendOrderCancelledNotificationUseCase
 
-    @Test fun `dispatches both order events through a real broker`() {
+    @Test fun `despacha ambos eventos de pedido mediante un broker real`() {
         val orderId = UUID.randomUUID()
         send("OrderConfirmedEvent", orderId)
         send("OrderCancelledEvent", orderId)

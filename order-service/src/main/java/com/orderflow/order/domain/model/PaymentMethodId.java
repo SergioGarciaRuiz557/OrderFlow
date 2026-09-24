@@ -3,12 +3,12 @@ package com.orderflow.order.domain.model;
 import com.orderflow.order.domain.exception.DomainInvariantViolationException;
 
 /**
- * Opaque reference to the payment method that a future Payment adapter will authorize.
+ * Referencia opaca al método de pago que autorizará un adaptador de Payment.
  *
- * @param value non-blank provider-independent reference; surrounding whitespace is removed
+ * @param value referencia no vacía e independiente del proveedor; se eliminan los espacios en blanco de los extremos
  */
 public record PaymentMethodId(String value) {
-    /** Normalizes and validates the payment-method reference. */
+    /** Normaliza y valida la referencia del método de pago. */
     public PaymentMethodId {
         if (value == null || value.isBlank()) {
             throw new DomainInvariantViolationException("Payment method id is required");

@@ -2,12 +2,12 @@ package com.orderflow.order.application.port.in;
 
 import java.util.UUID;
 
-/** Inbound callback boundary for successful payment authorization. */
+/** Límite de notificación de entrada para una autorización de pago correcta. */
 public interface HandlePaymentAuthorizedUseCase {
     /**
-     * Records payment success and confirms the order.
+     * Registra el pago correcto y confirma el pedido.
      *
-     * @param orderId order referenced by the external result
+     * @param orderId pedido al que hace referencia el resultado externo
      */
     void handle(UUID orderId);
 }

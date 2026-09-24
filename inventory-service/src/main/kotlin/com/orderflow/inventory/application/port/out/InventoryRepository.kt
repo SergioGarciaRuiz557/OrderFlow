@@ -6,50 +6,51 @@ import com.orderflow.inventory.domain.model.ReservationId
 import com.orderflow.inventory.domain.model.OrderId
 
 /**
- * Outbound persistence port for complete [InventoryItem] aggregates.
+ * Puerto de persistencia de salida para agregados [InventoryItem] completos.
  *
- * The contract uses only domain types, keeping Spring Data and JPA outside the application core.
- * Implementations must load the complete reservation collection because its contents participate in
- * aggregate invariants and order-level idempotency decisions.
+ * El contrato solo utiliza tipos de dominio, por lo que Spring Data y JPA permanecen fuera del núcleo
+ * de la aplicación. Las implementaciones deben cargar la colección completa de reservas porque su
+ * contenido participa en las invariantes del agregado y en las decisiones de idempotencia del pedido.
  */
 interface InventoryRepository {
     /**
-     * Loads the aggregate belonging to [productId].
+     * Carga el agregado que pertenece a [productId].
      *
-     * @return the complete aggregate, or `null` when no inventory has been prepared.
+     * @return el agregado completo, o `null` cuando no se ha preparado ningún inventario.
      */
     fun findByProductId(productId: ProductId): InventoryItem?
 
     /**
-     * Loads the aggregate that owns [reservationId].
+     * Carga el agregado al que pertenece [reservationId].
      *
-     * This lookup supports release commands, which identify a reservation rather than a product.
+     * Esta búsqueda sirve a los comandos de liberación, que identifican una reserva en lugar de un producto.
      *
-     * @return the owning aggregate with its complete reservation history, or `null` if unknown.
+     * @return el agregado propietario con su historial completo de reservas, o `null` si es desconocido.
      */
     fun findByReservationId(reservationId: ReservationId): InventoryItem?
 
-    /** Loads all product aggregates containing a reservation for the order. */
+    /** Carga todos los agregados de producto que contienen una reserva para el pedido. */
     fun findByOrderId(orderId: OrderId): List<InventoryItem>
 
     /**
-     * Persists a complete aggregate using its optimistic-lock version.
+     * Persiste un agregado completo utilizando su versión de bloqueo optimista.
      *
-     * @param inventoryItem new aggregate snapshot to insert or update.
-     * @return persisted snapshot containing the database-assigned version.
-     * @throws ConcurrentInventoryModificationException if another writer changed conflicting state.
+     * @param inventoryItem nueva instantánea del agregado que se insertará o actualizará.
+     * @return instantánea persistida que contiene la versión asignada por la base de datos.
+     * @throws ConcurrentInventoryModificationException si otro escritor modificó un estado incompatible.
      */
     fun save(inventoryItem: InventoryItem): InventoryItem
 }
 
 /**
- * Technology-neutral signal that an aggregate write lost a concurrency race.
+ * Señal independiente de la tecnología que indica que la escritura de un agregado perdió una carrera de concurrencia.
  *
- * Persistence adapters translate framework-specific optimistic-lock and relevant uniqueness
- * exceptions into this type. The application service can then reload the latest aggregate and
- * re-evaluate business rules without depending on Spring Data exception classes.
+ * Los adaptadores de persistencia traducen a este tipo las excepciones relevantes de unicidad y
+ * bloqueo optimista específicas del framework. Así, el servicio de aplicación puede volver a cargar
+ * el agregado más reciente y reevaluar las reglas de negocio sin depender de las clases de excepción
+ * de Spring Data.
  *
- * @param cause original infrastructure exception, retained for diagnostics.
+ * @param cause excepción de infraestructura original, conservada para el diagnóstico.
  */
 class ConcurrentInventoryModificationException(cause: Throwable? = null) :
     RuntimeException("Inventory was modified concurrently", cause)

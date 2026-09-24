@@ -8,25 +8,25 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Technology-independent result returned by Order application use cases.
+ * Resultado independiente de la tecnología que devuelven los casos de uso de la aplicación Order.
  *
- * <p>The REST adapter maps this view to JSON, but the type itself has no web annotations and can be
- * reused by future inbound adapters.</p>
+ * <p>El adaptador REST mapea esta vista a JSON, pero el propio tipo no tiene anotaciones web y puede
+ * reutilizarse en otros adaptadores de entrada.</p>
  *
- * @param orderId aggregate identity
- * @param status current lifecycle state
- * @param total calculated decimal total
- * @param currency ISO currency code
- * @param createdAt aggregate creation time
- * @param updatedAt latest transition time
+ * @param orderId identidad del agregado
+ * @param status estado actual del ciclo de vida
+ * @param total total decimal calculado
+ * @param currency código ISO de la divisa
+ * @param createdAt instante de creación del agregado
+ * @param updatedAt instante de la última transición
  */
 public record OrderView(UUID orderId, OrderStatus status, BigDecimal total, String currency,
                         Instant createdAt, Instant updatedAt) {
     /**
-     * Creates an application result from a domain aggregate without exposing domain value objects.
+     * Crea un resultado de la aplicación a partir de un agregado del dominio sin exponer objetos de valor del dominio.
      *
-     * @param order source aggregate
-     * @return flattened application view
+     * @param order agregado de origen
+     * @return vista aplanada de la aplicación
      */
     public static OrderView from(Order order) {
         return new OrderView(order.id().value(), order.status(), order.total().amount(),

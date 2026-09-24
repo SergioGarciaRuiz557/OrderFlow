@@ -5,10 +5,10 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Fact recorded after a valid Order aggregate has been created and priced.
+ * Hecho registrado después de crear y valorar un agregado Order válido.
  *
- * @param orderId created aggregate
- * @param occurredAt creation time
+ * @param orderId agregado creado
+ * @param occurredAt instante de creación
  */
 public record OrderCreated(OrderId orderId, Instant occurredAt) implements OrderDomainEvent {
 }

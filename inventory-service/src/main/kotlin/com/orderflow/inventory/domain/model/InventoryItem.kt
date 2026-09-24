@@ -3,20 +3,22 @@ package com.orderflow.inventory.domain.model
 import java.time.Instant
 
 /**
- * Aggregate root that owns the stock and reservation history of one product.
+ * Raíz de agregado responsable de las existencias y el historial de reservas de un producto.
  *
- * All stock arithmetic happens through this type. Callers cannot independently decrement stock or
- * mutate a [StockReservation], which keeps availability and reservation history consistent. Domain
- * operations return new aggregate instances so previously loaded state remains an immutable
- * snapshot suitable for optimistic concurrency control.
+ * Toda la aritmética de existencias se realiza mediante este tipo. Los consumidores no pueden
+ * reducir las existencias ni modificar una [StockReservation] de forma independiente, lo que mantiene
+ * coherentes la disponibilidad y el historial de reservas. Las operaciones de dominio devuelven
+ * nuevas instancias del agregado para que el estado cargado previamente siga siendo una instantánea
+ * inmutable adecuada para el control de concurrencia optimista.
  *
- * The constructor is private to force creation through [create] or persistence reconstruction
- * through [reconstitute]. Both routes execute the aggregate invariants in the `init` block.
+ * El constructor es privado para obligar a crear instancias mediante [create] o a reconstruirlas
+ * desde la persistencia mediante [reconstitute]. Ambas rutas ejecutan las invariantes del agregado
+ * en el bloque `init`.
  *
- * @property productId product represented by this aggregate.
- * @property availableQuantity units currently available for new reservations; always non-negative.
- * @property reservations immutable history of active and released reservations for the product.
- * @property version persistence concurrency token, or `null` before the aggregate is first stored.
+ * @property productId producto representado por este agregado.
+ * @property availableQuantity unidades disponibles actualmente para nuevas reservas; nunca es negativo.
+ * @property reservations historial inmutable de reservas activas y liberadas del producto.
+ * @property version token de concurrencia de persistencia, o `null` antes de almacenar el agregado por primera vez.
  */
 @ConsistentCopyVisibility
 data class InventoryItem private constructor(
@@ -26,11 +28,11 @@ data class InventoryItem private constructor(
     val version: Long?,
 ) {
     /**
-     * Validates invariants that must hold for every aggregate state, including database-loaded data.
+     * Valida las invariantes que deben cumplirse en todos los estados del agregado, incluidos los datos cargados de la base de datos.
      *
-     * The second condition makes the product/order pair the business idempotency boundary. A
-     * released reservation remains in history, so the same order cannot later create another
-     * reservation for the same product by accident.
+     * La segunda condición convierte el par producto/pedido en la frontera de idempotencia de negocio.
+     * Una reserva liberada permanece en el historial, por lo que el mismo pedido no puede crear
+     * accidentalmente otra reserva posterior para el mismo producto.
      */
     init {
         require(availableQuantity >= 0) { "Available stock cannot be negative" }
@@ -40,15 +42,16 @@ data class InventoryItem private constructor(
     }
 
     /**
-     * Replaces the stock currently available for new reservations.
+     * Sustituye las existencias disponibles actualmente para nuevas reservas.
      *
-     * This operation supports the administration/development API. It changes availability directly
-     * but deliberately preserves reservation history. Persisting the returned aggregate uses the
-     * existing [version], so concurrent changes are still detected.
+     * Esta operación sirve a la API de administración y desarrollo. Modifica directamente la
+     * disponibilidad, pero conserva deliberadamente el historial de reservas. Al persistir el
+     * agregado devuelto se utiliza la [version] existente, por lo que se siguen detectando los
+     * cambios concurrentes.
      *
-     * @param quantity new number of units available for reservation; zero is valid.
-     * @return a new aggregate with the requested availability.
-     * @throws IllegalArgumentException when [quantity] is negative.
+     * @param quantity nuevo número de unidades disponibles para reserva; cero es válido.
+     * @return un nuevo agregado con la disponibilidad solicitada.
+     * @throws IllegalArgumentException cuando [quantity] es negativo.
      */
     fun setAvailableQuantity(quantity: Int): InventoryItem {
         require(quantity >= 0) { "Available stock cannot be negative" }
@@ -56,25 +59,26 @@ data class InventoryItem private constructor(
     }
 
     /**
-     * Attempts to allocate stock to an order while enforcing availability and idempotency.
+     * Intenta asignar existencias a un pedido aplicando las reglas de disponibilidad e idempotencia.
      *
-     * Evaluation order is intentional:
-     * 1. Existing order reservations are handled before stock checks, allowing an exact duplicate
-     *    request to return its original successful reservation even if stock is now exhausted.
-     * 2. A different request for the same order is rejected to prevent duplicate allocations.
-     * 3. New requests are rejected when the requested quantity exceeds availability.
-     * 4. Accepted requests atomically reduce availability and append their reservation record in the
-     *    returned aggregate state.
+     * El orden de evaluación es intencionado:
+     * 1. Las reservas existentes del pedido se procesan antes de comprobar las existencias, lo que
+     *    permite que una solicitud duplicada exacta devuelva su reserva satisfactoria original aunque
+     *    las existencias se hayan agotado.
+     * 2. Se rechaza una solicitud diferente para el mismo pedido a fin de evitar asignaciones duplicadas.
+     * 3. Las solicitudes nuevas se rechazan cuando la cantidad solicitada supera la disponibilidad.
+     * 4. Las solicitudes aceptadas reducen la disponibilidad y añaden su registro de reserva de forma
+     *    atómica en el estado devuelto del agregado.
      *
-     * No `null` value or exception represents a normal business rejection; every path returns an
-     * explicit [ReservationResult].
+     * Ningún valor `null` ni excepción representa un rechazo de negocio normal; todas las rutas
+     * devuelven un [ReservationResult] explícito.
      *
-     * @param reservationId candidate identifier for a new reservation.
-     * @param orderId order requesting the stock.
-     * @param quantity positive number of units requested.
-     * @param at authoritative time used if a new reservation is accepted.
-     * @return [ReservationResult.Reserved] for new or idempotently repeated success, otherwise
-     * [ReservationResult.Rejected] with a business reason.
+     * @param reservationId identificador candidato para una nueva reserva.
+     * @param orderId pedido que solicita las existencias.
+     * @param quantity número positivo de unidades solicitadas.
+     * @param at instante de referencia utilizado si se acepta una nueva reserva.
+     * @return [ReservationResult.Reserved] para un resultado satisfactorio nuevo o repetido de forma
+     * idempotente; en caso contrario, [ReservationResult.Rejected] con un motivo de negocio.
      */
     fun reserve(
         reservationId: ReservationId,
@@ -82,7 +86,7 @@ data class InventoryItem private constructor(
         quantity: Quantity,
         at: Instant,
     ): ReservationResult {
-        // Order identity is the first guard because it defines business-level idempotency.
+        // La identidad del pedido es la primera protección porque define la idempotencia de negocio.
         val existing = reservations.firstOrNull { it.orderId == orderId }
         if (existing != null) {
             return if (existing.status == ReservationStatus.ACTIVE && existing.quantity == quantity) {
@@ -95,7 +99,7 @@ data class InventoryItem private constructor(
             }
         }
 
-        // Stock is checked before subtraction, so a negative state can never be constructed.
+        // Las existencias se comprueban antes de restar, por lo que nunca puede construirse un estado negativo.
         if (quantity.value > availableQuantity) {
             return ReservationResult.Rejected(
                 reason = ReservationRejectionReason.INSUFFICIENT_STOCK,
@@ -103,7 +107,7 @@ data class InventoryItem private constructor(
             )
         }
 
-        // Availability and traceability change together in the new aggregate snapshot.
+        // La disponibilidad y la trazabilidad cambian a la vez en la nueva instantánea del agregado.
         val reservation = StockReservation.active(reservationId, orderId, quantity, at)
         return ReservationResult.Reserved(
             inventoryItem = copy(
@@ -116,16 +120,16 @@ data class InventoryItem private constructor(
     }
 
     /**
-     * Releases a reservation and restores its units exactly once.
+     * Libera una reserva y repone sus unidades exactamente una vez.
      *
-     * Unknown identifiers and repeated releases are different explicit outcomes. This distinction
-     * lets inbound adapters define an idempotency policy without hiding malformed commands. For an
-     * active reservation, both the reservation status and available stock are updated in one new
-     * aggregate state.
+     * Los identificadores desconocidos y las liberaciones repetidas son resultados explícitos
+     * diferentes. Esta distinción permite que los adaptadores de entrada definan una política de
+     * idempotencia sin ocultar comandos incorrectos. En una reserva activa, tanto el estado de la
+     * reserva como las existencias disponibles se actualizan en un único estado nuevo del agregado.
      *
-     * @param reservationId identifier of the reservation to compensate.
-     * @param at authoritative time recorded for a first release.
-     * @return one exhaustive [ReleaseResult] describing release, duplicate release, or absence.
+     * @param reservationId identificador de la reserva que se compensará.
+     * @param at instante de referencia registrado para una primera liberación.
+     * @return un [ReleaseResult] exhaustivo que describe la liberación, su duplicación o su ausencia.
      */
     fun release(reservationId: ReservationId, at: Instant): ReleaseResult {
         val reservation = reservations.firstOrNull { it.id == reservationId }
@@ -135,7 +139,7 @@ data class InventoryItem private constructor(
             return ReleaseResult.AlreadyReleased(this, reservation)
         }
 
-        // The map replaces only the owned entity being released and preserves the full history.
+        // El mapeo sustituye únicamente la entidad propia que se libera y conserva el historial completo.
         val released = reservation.release(at)
         return ReleaseResult.Released(
             inventoryItem = copy(
@@ -146,14 +150,14 @@ data class InventoryItem private constructor(
         )
     }
 
-    /** Controlled construction paths for new and persisted aggregate instances. */
+    /** Rutas de construcción controladas para instancias nuevas y persistidas del agregado. */
     companion object {
         /**
-         * Creates inventory that has not yet been persisted and has no reservation history.
+         * Crea un inventario que aún no se ha persistido y no tiene historial de reservas.
          *
-         * @param productId product to manage.
-         * @param availableQuantity initial stock; zero is permitted.
-         * @return a new aggregate whose [version] is `null` until persistence assigns one.
+         * @param productId producto que se gestionará.
+         * @param availableQuantity existencias iniciales; se permite cero.
+         * @return un nuevo agregado cuya [version] es `null` hasta que la persistencia le asigne una.
          */
         fun create(productId: ProductId, availableQuantity: Int): InventoryItem = InventoryItem(
             productId = productId,
@@ -163,16 +167,17 @@ data class InventoryItem private constructor(
         )
 
         /**
-         * Rebuilds an aggregate from persistence without exposing a public unrestricted constructor.
+         * Reconstruye un agregado desde la persistencia sin exponer un constructor público sin restricciones.
          *
-         * A defensive list copy prevents a mutable persistence collection from becoming part of the
-         * domain state. Constructor invariants validate the stored data during reconstruction.
+         * Una copia defensiva de la lista evita que una colección mutable de persistencia pase a formar
+         * parte del estado del dominio. Las invariantes del constructor validan los datos almacenados
+         * durante la reconstrucción.
          *
-         * @param productId persisted product identifier.
-         * @param availableQuantity persisted available stock.
-         * @param reservations complete persisted reservation history for the product.
-         * @param version optimistic-lock version read from PostgreSQL.
-         * @return the reconstructed aggregate snapshot.
+         * @param productId identificador persistido del producto.
+         * @param availableQuantity existencias disponibles persistidas.
+         * @param reservations historial completo de reservas persistidas del producto.
+         * @param version versión de bloqueo optimista leída de PostgreSQL.
+         * @return la instantánea reconstruida del agregado.
          */
         fun reconstitute(
             productId: ProductId,
@@ -183,31 +188,32 @@ data class InventoryItem private constructor(
     }
 }
 
-/** Business reasons for rejecting an inventory reservation request. */
+/** Motivos de negocio para rechazar una solicitud de reserva de inventario. */
 enum class ReservationRejectionReason {
-    /** The requested quantity is greater than the aggregate's current availability. */
+    /** La cantidad solicitada es superior a la disponibilidad actual del agregado. */
     INSUFFICIENT_STOCK,
 
-    /** The order already owns a reservation that is not the same idempotent request. */
+    /** El pedido ya posee una reserva que no corresponde a la misma solicitud idempotente. */
     ORDER_ALREADY_HAS_RESERVATION,
 
-    /** No inventory aggregate has been prepared for the requested product. */
+    /** No se ha preparado ningún agregado de inventario para el producto solicitado. */
     INVENTORY_ITEM_NOT_FOUND,
 }
 
 /**
- * Exhaustive business outcome of a reservation attempt.
+ * Resultado exhaustivo de negocio de un intento de reserva.
  *
- * This sealed hierarchy ensures callers must consciously process accepted and rejected outcomes.
- * Technical persistence failures are not included because they are not business rejections.
+ * Esta jerarquía sellada garantiza que los consumidores procesen de forma consciente los resultados
+ * aceptados y rechazados. Los fallos técnicos de persistencia no se incluyen porque no son rechazos
+ * de negocio.
  */
 sealed interface ReservationResult {
     /**
-     * Successful reservation outcome.
+     * Resultado satisfactorio de una reserva.
      *
-     * @property inventoryItem aggregate state containing the accepted reservation.
-     * @property reservation newly created or previously existing idempotent reservation.
-     * @property wasAlreadyReserved `true` when no state change or database write is required.
+     * @property inventoryItem estado del agregado que contiene la reserva aceptada.
+     * @property reservation reserva idempotente recién creada o ya existente.
+     * @property wasAlreadyReserved `true` cuando no se requiere ningún cambio de estado ni escritura en la base de datos.
      */
     data class Reserved(
         val inventoryItem: InventoryItem,
@@ -216,11 +222,11 @@ sealed interface ReservationResult {
     ) : ReservationResult
 
     /**
-     * Expected business rejection that leaves aggregate state unchanged.
+     * Rechazo de negocio esperado que no modifica el estado del agregado.
      *
-     * @property reason rule that prevented allocation.
-     * @property availableQuantity stock observed during evaluation, or `null` when the product does
-     * not exist and therefore has no stock level.
+     * @property reason regla que impidió la asignación.
+     * @property availableQuantity existencias observadas durante la evaluación, o `null` cuando el
+     * producto no existe y, por tanto, no tiene un nivel de existencias.
      */
     data class Rejected(
         val reason: ReservationRejectionReason,
@@ -229,17 +235,17 @@ sealed interface ReservationResult {
 }
 
 /**
- * Exhaustive business outcome of releasing a reservation.
+ * Resultado exhaustivo de negocio de la liberación de una reserva.
  *
- * Repeated and unknown releases are modeled separately so application adapters can be idempotent
- * without silently accepting an invalid reservation identifier.
+ * Las liberaciones repetidas y desconocidas se modelan por separado para que los adaptadores de
+ * aplicación puedan ser idempotentes sin aceptar silenciosamente un identificador de reserva no válido.
  */
 sealed interface ReleaseResult {
     /**
-     * First successful release.
+     * Primera liberación satisfactoria.
      *
-     * @property inventoryItem aggregate after stock restoration.
-     * @property reservation reservation transitioned to released state.
+     * @property inventoryItem agregado después de reponer las existencias.
+     * @property reservation reserva que ha pasado al estado liberado.
      */
     data class Released(
         val inventoryItem: InventoryItem,
@@ -247,10 +253,10 @@ sealed interface ReleaseResult {
     ) : ReleaseResult
 
     /**
-     * Idempotent result for a reservation that was released previously.
+     * Resultado idempotente de una reserva que ya se había liberado.
      *
-     * @property inventoryItem unchanged aggregate state.
-     * @property reservation existing released reservation with its original release time.
+     * @property inventoryItem estado sin cambios del agregado.
+     * @property reservation reserva liberada existente con su instante de liberación original.
      */
     data class AlreadyReleased(
         val inventoryItem: InventoryItem,
@@ -258,9 +264,9 @@ sealed interface ReleaseResult {
     ) : ReleaseResult
 
     /**
-     * Explicit result when no aggregate contains the supplied reservation identifier.
+     * Resultado explícito cuando ningún agregado contiene el identificador de reserva proporcionado.
      *
-     * @property reservationId identifier that could not be located.
+     * @property reservationId identificador que no se pudo localizar.
      */
     data class ReservationNotFound(val reservationId: ReservationId) : ReleaseResult
 }

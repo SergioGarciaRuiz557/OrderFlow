@@ -12,41 +12,41 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 
-/** Mutable JPA representation of one {@code order_lines} row owned by an order. */
+/** Representación JPA mutable de una fila de {@code order_lines} perteneciente a un pedido. */
 @Entity
 @Table(name = "order_lines")
 public class JpaOrderLineEntity {
-    /** Database-generated technical row key; it has no domain meaning. */
+    /** Clave técnica de fila generada por la base de datos; carece de significado en el dominio. */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Owning order row and foreign-key association. */
+    /** Fila propietaria del pedido y asociación mediante clave externa. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private JpaOrderEntity order;
 
-    /** Persisted product catalogue reference. */
+    /** Referencia persistida del catálogo de productos. */
     @Column(name = "product_id", nullable = false)
     private String productId;
 
-    /** Persisted positive unit count. */
+    /** Número positivo de unidades persistido. */
     @Column(nullable = false)
     private int quantity;
 
-    /** Persisted non-negative price for one unit. */
+    /** Precio no negativo persistido de una unidad. */
     @Column(name = "unit_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal unitPrice;
 
-    /** ISO currency code accompanying the unit price. */
+    /** Código ISO de la divisa que acompaña al precio unitario. */
     @Column(nullable = false, length = 3)
     private String currency;
 
-    /** Required by JPA; production code creates lines through the persistence mapper. */
+    /** Requerido por JPA; el código de producción crea líneas mediante el mapeador de persistencia. */
     protected JpaOrderLineEntity() {
     }
 
-    /** Creates a child persistence record from one domain line. */
+    /** Crea un registro hijo de persistencia a partir de una línea del dominio. */
     JpaOrderLineEntity(String productId, int quantity, BigDecimal unitPrice, String currency) {
         this.productId = productId;
         this.quantity = quantity;
@@ -55,20 +55,20 @@ public class JpaOrderLineEntity {
     }
 
     /**
-     * Completes the child-to-parent side of the JPA association.
+     * Completa el lado de hijo a padre de la asociación JPA.
      *
-     * @param order owning persistence entity
+     * @param order entidad propietaria de persistencia
      */
     void attachTo(JpaOrderEntity order) {
         this.order = order;
     }
 
-    /** Returns the product column. @return stored product reference */
+    /** Devuelve la columna de producto. @return referencia almacenada del producto */
     String productId() { return productId; }
-    /** Returns the quantity column. @return stored quantity */
+    /** Devuelve la columna de cantidad. @return cantidad almacenada */
     int quantity() { return quantity; }
-    /** Returns the unit-price column. @return stored unit price */
+    /** Devuelve la columna de precio unitario. @return precio unitario almacenado */
     BigDecimal unitPrice() { return unitPrice; }
-    /** Returns the currency column. @return stored unit-price currency */
+    /** Devuelve la columna de divisa. @return divisa almacenada del precio unitario */
     String currency() { return currency; }
 }

@@ -1,47 +1,47 @@
-# Inventory Service
+# Servicio de inventario
 
-The Inventory bounded context owns the available stock for each product and the lifecycle of stock reservations. It can run independently: administrators can prepare and inspect inventory over REST, while application ports provide reservation and release operations for future message adapters.
+El contexto delimitado de Inventario es responsable de las existencias disponibles de cada producto y del ciclo de vida de las reservas de existencias. Puede ejecutarse de forma independiente: los administradores pueden preparar y consultar el inventario mediante REST, mientras que los puertos de aplicación proporcionan operaciones de reserva y liberación para futuros adaptadores de mensajería.
 
-## Architecture
+## Arquitectura
 
-The service uses DDD with hexagonal boundaries:
+El servicio utiliza DDD con límites hexagonales:
 
-- `domain/model` contains framework-free business behavior.
-- `application/port/in` defines use cases and `application/port/out` defines infrastructure contracts.
-- `application/service` orchestrates aggregate loading, behavior, persistence, and bounded concurrency retries.
-- `adapter/in/rest` exposes the administration API.
-- `adapter/out/persistence` maps the domain explicitly to Spring Data JPA entities.
+- `domain/model` contiene el comportamiento de negocio independiente de frameworks.
+- `application/port/in` define los casos de uso y `application/port/out` define los contratos de infraestructura.
+- `application/service` coordina la carga de agregados, el comportamiento, la persistencia y los reintentos acotados por concurrencia.
+- `adapter/in/rest` expone la API de administración.
+- `adapter/out/persistence` asigna explícitamente el dominio a entidades JPA de Spring Data.
 
-`InventoryItem` is the aggregate root. It owns the current available quantity and all `StockReservation` entities for one `ProductId`; reservations are never changed independently of their inventory item. `StockReservation` records the reservation id, order id, quantity, status, reservation time, and optional release time. This history makes allocation and compensation traceable instead of representing reservation as an unexplained integer decrement.
+`InventoryItem` es la raíz del agregado. Posee la cantidad disponible actual y todas las entidades `StockReservation` de un `ProductId`; las reservas nunca se modifican independientemente de su elemento de inventario. `StockReservation` registra el identificador de la reserva, el identificador del pedido, la cantidad, el estado, la hora de reserva y la hora de liberación opcional. Este historial permite rastrear la asignación y la compensación, en lugar de representar una reserva como un decremento entero sin explicación.
 
-## Invariants and idempotency
+## Invariantes e idempotencia
 
-- Available stock cannot be negative.
-- A reservation `Quantity` is always positive.
-- A reservation cannot exceed available stock.
-- A product/order pair has at most one reservation, enforced in both the aggregate and PostgreSQL.
-- Repeating the same active reservation request with the same order and quantity returns the existing reservation as an idempotent success.
-- Reusing an order with a different quantity, or after its reservation has been released, is explicitly rejected.
-- Releasing an already released reservation is an explicit idempotent outcome and never restores stock twice.
-- Releasing an unknown reservation returns `ReservationNotFound`; it is not silently accepted.
+- Las existencias disponibles no pueden ser negativas.
+- Una `Quantity` de reserva siempre es positiva.
+- Una reserva no puede superar las existencias disponibles.
+- Un par producto/pedido tiene como máximo una reserva, restricción aplicada tanto en el agregado como en PostgreSQL.
+- Repetir la misma solicitud de reserva activa con el mismo pedido y la misma cantidad devuelve la reserva existente como resultado idempotente satisfactorio.
+- Reutilizar un pedido con una cantidad diferente, o después de que se haya liberado su reserva, se rechaza explícitamente.
+- Liberar una reserva ya liberada es un resultado idempotente explícito y nunca repone las existencias dos veces.
+- Liberar una reserva desconocida devuelve `ReservationNotFound`; no se acepta silenciosamente.
 
-Reservation and release outcomes are sealed Kotlin hierarchies. Callers use exhaustive `when` expressions and never infer a business rejection from `null` or an infrastructure exception.
+Los resultados de reserva y liberación son jerarquías selladas de Kotlin. Los consumidores usan expresiones `when` exhaustivas y nunca deducen un rechazo de negocio a partir de `null` o de una excepción de infraestructura.
 
-## Kotlin design
+## Diseño en Kotlin
 
-Identifiers and positive `Quantity` use `@JvmInline value class` types. Aggregate transitions return new immutable values, reservation results are sealed interfaces, nullable values are limited to genuinely optional state, and the implementation favors direct expressions over JavaBean patterns or dense scope-function chains.
+Los identificadores y la `Quantity` positiva usan tipos `@JvmInline value class`. Las transiciones del agregado devuelven nuevos valores inmutables, los resultados de reserva son interfaces selladas, los valores anulables se limitan a estados realmente opcionales y la implementación favorece las expresiones directas frente a patrones JavaBean o cadenas densas de funciones de ámbito.
 
-## Persistence and concurrency
+## Persistencia y concurrencia
 
-PostgreSQL is managed by Flyway. The JPA entities are persistence-only models and an explicit mapper reconstructs the domain aggregate. Neither Spring Data nor JPA types cross the output port.
+Flyway administra PostgreSQL. Las entidades JPA son modelos exclusivos de persistencia y un asignador explícito reconstruye el agregado de dominio. Ni Spring Data ni los tipos JPA atraviesan el puerto de salida.
 
-`inventory_items.version` is mapped with `@Version`. Each reservation or release is evaluated against a loaded aggregate and saved optimistically. If another transaction wins the race, the application service reloads and evaluates the business rule again (up to three attempts). Consequently, two orders racing for the final unit yield one reservation and one insufficient-stock rejection rather than overselling. The database uniqueness constraint on `(product_id, order_id)` is a second line of defense against duplicate reservation creation.
+`inventory_items.version` se asigna con `@Version`. Cada reserva o liberación se evalúa sobre un agregado cargado y se guarda de forma optimista. Si otra transacción gana la carrera, el servicio de aplicación vuelve a cargar el estado y a evaluar la regla de negocio (hasta tres intentos). Por tanto, cuando dos pedidos compiten por la última unidad, se obtiene una reserva y un rechazo por existencias insuficientes, en lugar de vender más unidades de las disponibles. La restricción de unicidad de la base de datos sobre `(product_id, order_id)` constituye una segunda línea de defensa contra la creación de reservas duplicadas.
 
-Integration tests use a disposable Testcontainers PostgreSQL instance to verify Flyway, persistence round trips, stale-write detection, and concurrent final-unit reservation. They are skipped only when Docker is unavailable.
+Las pruebas de integración usan una instancia desechable de PostgreSQL con Testcontainers para verificar Flyway, los ciclos completos de persistencia, la detección de escrituras obsoletas y la reserva concurrente de la última unidad. Solo se omiten cuando Docker no está disponible.
 
-## REST administration API
+## API REST de administración
 
-Set the currently available quantity (zero is valid):
+Establece la cantidad disponible actual (se admite cero):
 
 ```http
 PUT /api/inventory/{productId}
@@ -52,31 +52,25 @@ Content-Type: application/json
 }
 ```
 
-Inspect inventory and its reservation history:
+Consulta el inventario y su historial de reservas:
 
 ```http
 GET /api/inventory/{productId}
 ```
 
-`PUT` sets the available quantity directly and is intended for administration/development stock preparation. It does not rewrite reservation history. Reservation and release are deliberately exposed as application APIs rather than temporary production REST endpoints.
+`PUT` establece directamente la cantidad disponible y está pensado para la preparación administrativa o de desarrollo de las existencias. No reescribe el historial de reservas. La reserva y la liberación se exponen deliberadamente como API de aplicación, en lugar de como endpoints REST provisionales de producción.
 
-## Running
+## Ejecución
 
-Local execution requires Docker. Spring Boot uses `inventory-service/compose.yaml` to start
-PostgreSQL automatically before the application context is created and stops the container when the
-application exits. The root `compose.yaml` includes that file so discovery also works when an IDE
-launches the service with the repository root as its working directory. The database is persisted in
-the `inventory-postgres-data` Docker volume.
+La ejecución local requiere Docker. Spring Boot usa `inventory-service/compose.yaml` para iniciar PostgreSQL automáticamente antes de crear el contexto de la aplicación y detiene el contenedor cuando finaliza la aplicación. El archivo `compose.yaml` de la raíz incluye ese archivo, por lo que el descubrimiento también funciona cuando un IDE inicia el servicio con la raíz del repositorio como directorio de trabajo. La base de datos se conserva en el volumen de Docker `inventory-postgres-data`.
 
-The default connection is `jdbc:postgresql://localhost:5432/inventory` with username and password
-`inventory`. Override it with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` when connecting to an
-externally managed database.
+La conexión predeterminada es `jdbc:postgresql://localhost:5432/inventory`, con nombre de usuario y contraseña `inventory`. Se puede sustituir mediante `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` al conectarse a una base de datos administrada externamente.
 
 ```shell
 ./gradlew test
 ./gradlew bootRun
 ```
 
-## Kafka integration
+## Integración con Kafka
 
-The `inventory-service.commands` group consumes `ReserveInventoryCommand` and `ReleaseInventoryCommand` from `order.inventory.commands`. Thin adapters validate/map the local JSON DTOs and invoke Inventory input ports. Definitive outcomes are published through `InventoryEventPublisher` as `InventoryReservedEvent`, `InventoryRejectedEvent`, or `InventoryReleasedEvent` on `inventory.order.events`; stock rejection is a normal business event, not a technical exception.
+El grupo `inventory-service.commands` consume `ReserveInventoryCommand` y `ReleaseInventoryCommand` desde `order.inventory.commands`. Los adaptadores ligeros validan y asignan los DTO JSON locales e invocan los puertos de entrada de Inventario. Los resultados definitivos se publican a través de `InventoryEventPublisher` como `InventoryReservedEvent`, `InventoryRejectedEvent` o `InventoryReleasedEvent` en `inventory.order.events`; el rechazo por existencias es un evento de negocio normal, no una excepción técnica.

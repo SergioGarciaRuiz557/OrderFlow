@@ -26,39 +26,40 @@ import java.math.BigDecimal
 import java.time.Instant
 
 /**
- * Unit tests for orchestration and idempotency decisions in [AuthorizePaymentService].
+ * Pruebas unitarias de las decisiones de coordinación e idempotencia de [AuthorizePaymentService].
  *
- * MockK replaces repository, gateway, and clock ports so these tests verify interaction order and
- * branching without loading Spring or PostgreSQL. Aggregate lifecycle rules remain covered by their
- * own domain suite; these scenarios focus on how the application coordinates those rules.
+ * MockK sustituye los puertos de repositorio, pasarela y reloj para que estas pruebas verifiquen el
+ * orden de las interacciones y las ramificaciones sin cargar Spring ni PostgreSQL. Las reglas del ciclo
+ * de vida del agregado siguen cubiertas por su propio conjunto de dominio; estos escenarios se centran
+ * en cómo coordina la aplicación dichas reglas.
  */
 class AuthorizePaymentServiceTest {
-    /** Mock persistence boundary used to control existing state and inspect writes. */
+    /** Límite simulado de persistencia que se usa para controlar el estado existente e inspeccionar las escrituras. */
     private val repository = mockk<PaymentRepository>()
 
-    /** Mock provider boundary used to select success, rejection, or technical failure. */
+    /** Límite simulado del proveedor que se usa para seleccionar éxito, rechazo o fallo técnico. */
     private val gateway = mockk<PaymentGateway>()
 
-    /** Mock clock supplies deterministic creation and transition timestamps. */
+    /** El reloj simulado proporciona marcas de tiempo deterministas de creación y transición. */
     private val clock = mockk<ClockProvider>()
 
     /**
-     * Synchronous lock test double.
+     * Doble de prueba síncrono del bloqueo.
      *
-     * PostgreSQL locking has dedicated integration coverage; application unit tests only need the
-     * callback executed once without adding infrastructure behavior.
+     * El bloqueo de PostgreSQL cuenta con cobertura de integración específica; las pruebas unitarias
+     * de la aplicación solo necesitan que la función se ejecute una vez sin añadir comportamiento de infraestructura.
      */
     private val lock = object : PaymentAuthorizationLock {
         override fun <T : Any> withLock(orderId: OrderId, operation: () -> T): T = operation()
     }
 
-    /** System under test assembled directly through its ports. */
+    /** Sistema sometido a prueba ensamblado directamente mediante sus puertos. */
     private val service = AuthorizePaymentService(repository, gateway, clock, lock)
 
-    /** Stable fixture time reused across scenarios. */
+    /** Instante estable del fixture reutilizado en los distintos escenarios. */
     private val now = Instant.parse("2026-01-01T10:00:00Z")
 
-    /** Canonical valid authorization command; individual tests copy it only when intent must differ. */
+    /** Comando de autorización válido y canónico; cada prueba solo lo copia cuando la intención debe ser diferente. */
     private val command = AuthorizePaymentCommand(
         OrderId("order-1"),
         Money.euros(BigDecimal("19.99")),
@@ -66,11 +67,11 @@ class AuthorizePaymentServiceTest {
     )
 
     /**
-     * Verifies the new-payment success path creates pending state, calls the gateway once with the
-     * order idempotency key, transitions the aggregate, and persists both snapshots.
+     * Verifica que la ruta satisfactoria de un pago nuevo cree el estado pendiente, llame una vez a la
+     * pasarela con la clave de idempotencia del pedido, transicione el agregado y conserve ambas instantáneas.
      */
     @Test
-    fun `gateway success authorizes and persists payment`() {
+    fun `el éxito de la pasarela autoriza y conserva el pago`() {
         every { repository.findByOrderId(command.orderId) } returns null
         every { clock.now() } returnsMany listOf(now, now.plusSeconds(1))
         every { repository.save(any()) } answers { firstArg() }
@@ -86,9 +87,9 @@ class AuthorizePaymentServiceTest {
         verify(exactly = 1) { gateway.authorize(match { it.idempotencyKey == result.payment.orderId }) }
     }
 
-    /** Verifies a known decline is persisted and returned as a business rejection result. */
+    /** Verifica que un rechazo conocido se conserve y se devuelva como resultado de rechazo de negocio. */
     @Test
-    fun `business rejection persists rejected state`() {
+    fun `el rechazo de negocio conserva el estado rechazado`() {
         every { repository.findByOrderId(command.orderId) } returns null
         every { clock.now() } returnsMany listOf(now, now.plusSeconds(1))
         every { repository.save(any()) } answers { firstArg() }
@@ -103,11 +104,11 @@ class AuthorizePaymentServiceTest {
     }
 
     /**
-     * Verifies a provider timeout propagates while only the retryable pending snapshot is written;
-     * no rejected state is manufactured from a technical failure.
+     * Verifica que un tiempo de espera agotado del proveedor se propague mientras solo se escribe la
+     * instantánea pendiente y reintentable; no se fabrica un estado rechazado a partir de un fallo técnico.
      */
     @Test
-    fun `technical gateway failure propagates and leaves pending payment persisted`() {
+    fun `el fallo técnico de la pasarela se propaga y deja conservado el pago pendiente`() {
         every { repository.findByOrderId(command.orderId) } returns null
         every { clock.now() } returns now
         every { repository.save(any()) } answers { firstArg() }
@@ -118,9 +119,9 @@ class AuthorizePaymentServiceTest {
         verify(exactly = 1) { repository.save(match { it.status.name == "PENDING" }) }
     }
 
-    /** Protects the idempotent success path from any repeated gateway call or database write. */
+    /** Protege la ruta satisfactoria idempotente frente a cualquier llamada repetida a la pasarela o escritura en la base de datos. */
     @Test
-    fun `already authorized payment does not call gateway or repository save`() {
+    fun `un pago ya autorizado no llama a la pasarela ni guarda en el repositorio`() {
         val existing = pending().authorize(PaymentProviderReference("provider-existing"), now.plusSeconds(1))
         every { repository.findByOrderId(command.orderId) } returns existing
 
@@ -131,9 +132,9 @@ class AuthorizePaymentServiceTest {
         verify(exactly = 0) { repository.save(any()) }
     }
 
-    /** Protects the idempotent rejection path and preserves the original business reason. */
+    /** Protege la ruta de rechazo idempotente y conserva el motivo de negocio original. */
     @Test
-    fun `duplicate rejected authorization returns original business result`() {
+    fun `una autorización rechazada duplicada devuelve el resultado de negocio original`() {
         val existing = pending().reject(PaymentFailureReason("CARD_DECLINED"), now.plusSeconds(1))
         every { repository.findByOrderId(command.orderId) } returns existing
 
@@ -145,9 +146,9 @@ class AuthorizePaymentServiceTest {
         verify(exactly = 0) { repository.save(any()) }
     }
 
-    /** Verifies reuse of an order with changed amount fails before any external side effect. */
+    /** Verifica que reutilizar un pedido con un importe modificado falle antes de cualquier efecto secundario externo. */
     @Test
-    fun `different request for existing order fails before gateway`() {
+    fun `una solicitud diferente para un pedido existente falla antes de la pasarela`() {
         every { repository.findByOrderId(command.orderId) } returns pending()
         val changed = command.copy(amount = Money.euros(BigDecimal("20.00")))
 
@@ -156,7 +157,7 @@ class AuthorizePaymentServiceTest {
         verify(exactly = 0) { gateway.authorize(any()) }
     }
 
-    /** Creates a valid pending fixture matching [command] for duplicate and conflict scenarios. */
+    /** Crea un fixture pendiente válido que coincide con [command] para los escenarios de duplicado y conflicto. */
     private fun pending(): Payment = Payment.pending(
         PaymentId.new(),
         command.orderId,

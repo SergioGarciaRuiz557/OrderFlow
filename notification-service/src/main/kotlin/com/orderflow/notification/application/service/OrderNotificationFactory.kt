@@ -7,51 +7,52 @@ import com.orderflow.notification.domain.model.Recipient
 import org.springframework.stereotype.Component
 
 /**
- * Creates complete order notifications and their deterministic customer-facing content.
+ * Crea notificaciones completas de pedidos y su contenido determinista destinado al cliente.
  *
- * Centralizing message construction prevents both application services from embedding text and
- * gives a future template-backed implementation one clear replacement point. This class is kept
- * intentionally small: localization, template engines, and remote content providers are not current
- * requirements.
+ * Centralizar la construcción de mensajes evita que ambos servicios de aplicación incluyan texto y
+ * proporciona un punto claro de sustitución para una futura implementación basada en plantillas.
+ * Esta clase se mantiene pequeña de forma intencionada: la localización, los motores de plantillas y
+ * los proveedores remotos de contenido no son requisitos actuales.
  *
- * [Component] registers the factory in Spring's application context so it can be constructor-
- * injected into both notification services. Its public API itself remains independent of Spring.
+ * [Component] registra la factoría en el contexto de aplicación de Spring para que pueda inyectarse
+ * mediante el constructor en ambos servicios de notificaciones. Su API pública permanece
+ * independiente de Spring.
  */
 @Component
 class OrderNotificationFactory {
     /**
-     * Builds the message sent after an order is confirmed.
+     * Construye el mensaje que se envía después de confirmar un pedido.
      *
-     * @param orderId confirmed order included in the customer-facing text.
-     * @param recipient destination that will receive the notification.
-     * @return immutable confirmation notification ready for the output port.
+     * @param orderId pedido confirmado incluido en el texto destinado al cliente.
+     * @param recipient destino que recibirá la notificación.
+     * @return notificación de confirmación inmutable y lista para el puerto de salida.
      */
     fun confirmed(orderId: OrderId, recipient: Recipient): Notification = Notification(
-        // Preserve the validated business identifier received at the input boundary.
+        // Conserva el identificador de negocio validado que se recibió en el límite de entrada.
         orderId = orderId,
-        // Preserve the validated recipient; delivery adapters do not reinterpret application data.
+        // Conserva el destinatario validado; los adaptadores de entrega no reinterpretan los datos de aplicación.
         recipient = recipient,
-        // The explicit type lets outbound adapters distinguish this message without parsing text.
+        // El tipo explícito permite que los adaptadores de salida distingan el mensaje sin analizar el texto.
         type = NotificationType.ORDER_CONFIRMED,
-        // Interpolation produces stable content and avoids introducing a template engine prematurely.
+        // La interpolación produce contenido estable y evita introducir antes de tiempo un motor de plantillas.
         message = "Your order ${orderId.value} has been confirmed.",
     )
 
     /**
-     * Builds the message sent after an order is cancelled.
+     * Construye el mensaje que se envía después de cancelar un pedido.
      *
-     * @param orderId cancelled order included in the customer-facing text.
-     * @param recipient destination that will receive the notification.
-     * @return immutable cancellation notification ready for the output port.
+     * @param orderId pedido cancelado incluido en el texto destinado al cliente.
+     * @param recipient destino que recibirá la notificación.
+     * @return notificación de cancelación inmutable y lista para el puerto de salida.
      */
     fun cancelled(orderId: OrderId, recipient: Recipient): Notification = Notification(
-        // The same order identifier is carried as structured data and rendered in the message.
+        // El mismo identificador de pedido se transporta como dato estructurado y se muestra en el mensaje.
         orderId = orderId,
-        // Recipient remains provider-neutral until the outbound adapter receives it.
+        // El destinatario permanece independiente del proveedor hasta que lo recibe el adaptador de salida.
         recipient = recipient,
-        // Cancellation is modeled independently from confirmation in the supported type set.
+        // La cancelación se modela por separado de la confirmación dentro del conjunto de tipos admitidos.
         type = NotificationType.ORDER_CANCELLED,
-        // Deterministic wording makes current behavior predictable and straightforward to test.
+        // La redacción determinista hace que el comportamiento actual sea predecible y fácil de probar.
         message = "Your order ${orderId.value} has been cancelled.",
     )
 }

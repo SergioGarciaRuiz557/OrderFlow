@@ -1,49 +1,49 @@
-# Order Service
+# Servicio de pedidos
 
-The Order bounded context owns order creation, pricing, lifecycle rules, and the state needed to continue the future distributed order saga after a restart.
+El contexto delimitado de Order es responsable de crear y valorar pedidos, de las reglas de su ciclo de vida y del estado necesario para continuar la futura saga distribuida de pedidos después de un reinicio.
 
-For a class-by-class walkthrough, request flow, persistence explanation, error mapping, and test map,
-see [the detailed code guide](docs/code-guide.md). Production classes and methods also contain
-Javadoc next to their implementation so the design intent remains visible while navigating code.
+Para consultar un recorrido clase por clase, el flujo de las peticiones, una explicación de la persistencia, el mapeo de errores y el mapa de pruebas,
+véase [la guía detallada del código](docs/code-guide.md). Las clases y los métodos de producción también incluyen
+Javadoc junto a su implementación para que la intención del diseño permanezca visible al navegar por el código.
 
-## Domain model
+## Modelo de dominio
 
-`Order` is the aggregate root. It contains immutable `OrderLine` values and uses explicit domain types for order, customer, product, quantity, money, and payment-method identities. The aggregate calculates its own EUR total and exposes behavior-oriented transitions instead of generic state setters.
+`Order` es la raíz del agregado. Contiene valores `OrderLine` inmutables y utiliza tipos de dominio explícitos para las identidades de pedido, cliente, producto y método de pago, además de la cantidad y el dinero. El agregado calcula su propio total en EUR y expone transiciones orientadas al comportamiento en lugar de métodos genéricos para asignar el estado.
 
-The implemented invariants include:
+Las invariantes implementadas incluyen:
 
-- every order has at least one line;
-- quantities are positive and prices are non-negative;
-- money uses `BigDecimal`, carries a currency, and currently accepts EUR only;
-- payment cannot start before inventory has been reserved;
-- a confirmed order cannot use the pre-confirmation cancellation transition;
-- invalid transitions are rejected, while already-completed success/rejection callbacks are idempotent;
-- persisted totals must still match the rehydrated lines.
+- todo pedido tiene al menos una línea;
+- las cantidades son positivas y los precios no son negativos;
+- el dinero utiliza `BigDecimal`, incluye una divisa y actualmente solo admite EUR;
+- el pago no puede comenzar antes de que se haya reservado el inventario;
+- un pedido confirmado no puede utilizar la transición de cancelación previa a la confirmación;
+- las transiciones no válidas se rechazan, mientras que las notificaciones de éxito o rechazo ya completadas son idempotentes;
+- los totales persistidos deben seguir coincidiendo con las líneas rehidratadas.
 
-## Lifecycle
+## Ciclo de vida
 
-Creating an order immediately requests inventory reservation, leaving the persisted order in `INVENTORY_RESERVATION_PENDING`. The asynchronous response use cases advance the remaining lifecycle.
+Al crear un pedido se solicita inmediatamente la reserva de inventario y el pedido persistido queda en `INVENTORY_RESERVATION_PENDING`. Los casos de uso de respuesta asíncrona hacen avanzar el resto del ciclo de vida.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: create
-    PENDING --> INVENTORY_RESERVATION_PENDING: request inventory
-    INVENTORY_RESERVATION_PENDING --> INVENTORY_RESERVED: inventory reserved
-    INVENTORY_RESERVATION_PENDING --> CANCELLED: inventory rejected
-    INVENTORY_RESERVED --> PAYMENT_PENDING: request payment
-    PAYMENT_PENDING --> CONFIRMED: payment authorized
-    PAYMENT_PENDING --> CANCELLATION_PENDING: payment rejected / release inventory
-    PENDING --> CANCELLATION_PENDING: request cancellation
-    INVENTORY_RESERVATION_PENDING --> CANCELLATION_PENDING: request cancellation
-    INVENTORY_RESERVED --> CANCELLATION_PENDING: request cancellation / release inventory
-    CANCELLATION_PENDING --> CANCELLED: confirm cancellation
+    [*] --> PENDING: crear
+    PENDING --> INVENTORY_RESERVATION_PENDING: solicitar inventario
+    INVENTORY_RESERVATION_PENDING --> INVENTORY_RESERVED: inventario reservado
+    INVENTORY_RESERVATION_PENDING --> CANCELLED: inventario rechazado
+    INVENTORY_RESERVED --> PAYMENT_PENDING: solicitar pago
+    PAYMENT_PENDING --> CONFIRMED: pago autorizado
+    PAYMENT_PENDING --> CANCELLATION_PENDING: pago rechazado / liberar inventario
+    PENDING --> CANCELLATION_PENDING: solicitar cancelación
+    INVENTORY_RESERVATION_PENDING --> CANCELLATION_PENDING: solicitar cancelación
+    INVENTORY_RESERVED --> CANCELLATION_PENDING: solicitar cancelación / liberar inventario
+    CANCELLATION_PENDING --> CANCELLED: confirmar cancelación
     CONFIRMED --> [*]
     CANCELLED --> [*]
 ```
 
-## REST API
+## API REST
 
-### Create an order
+### Crear un pedido
 
 `POST /api/orders`
 
@@ -61,7 +61,7 @@ stateDiagram-v2
 }
 ```
 
-A successful request returns `201 Created`, a `Location` header, and an order representation:
+Una petición correcta devuelve `201 Created`, una cabecera `Location` y una representación del pedido:
 
 ```json
 {
@@ -74,82 +74,82 @@ A successful request returns `201 Created`, a `Location` header, and an order re
 }
 ```
 
-### Retrieve an order
+### Consultar un pedido
 
-`GET /api/orders/{orderId}` returns the same representation or `404 Not Found`.
+`GET /api/orders/{orderId}` devuelve la misma representación o `404 Not Found`.
 
-Errors consistently contain `timestamp`, HTTP `status`, application `code`, safe `message`, and request `path`. Transport validation errors are `400`, domain invariant violations are `422`, and infrastructure or unexpected failures are `500` without exposing stack traces.
+Los errores contienen de forma coherente `timestamp`, el `status` HTTP, el `code` de la aplicación, un `message` seguro y el `path` de la petición. Los errores de validación del transporte son `400`, las infracciones de invariantes del dominio son `422` y los fallos de infraestructura o inesperados son `500`, sin exponer trazas de pila.
 
-## Architecture
+## Arquitectura
 
-The code follows a hexagonal layout:
+El código sigue una estructura hexagonal:
 
-- `domain`: aggregate, value objects, invariants, and technology-neutral domain events;
-- `application/port/in`: concrete creation, query, inventory-result, and payment-result use cases;
-- `application/service`: orchestration that loads, invokes domain behavior, persists, and publishes;
-- `application/port/out`: repository, clock, ID generator, and messaging boundaries;
-- `adapter/in/rest`: Bean Validation, transport mapping, thin controller, and error handling;
-- `adapter/out/persistence`: JPA entities, Spring Data repository, mapper, and repository adapter;
-- `adapter/out/messaging`: the current no-op local publisher.
+- `domain`: agregado, objetos de valor, invariantes y eventos de dominio independientes de la tecnología;
+- `application/port/in`: casos de uso concretos de creación, consulta y resultados de inventario y pago;
+- `application/service`: orquestación que carga, invoca el comportamiento del dominio, persiste y publica;
+- `application/port/out`: límites de repositorio, reloj, generador de identificadores y mensajería;
+- `adapter/in/rest`: Bean Validation, mapeo de transporte, controlador ligero y gestión de errores;
+- `adapter/out/persistence`: entidades JPA, repositorio de Spring Data, mapeador y adaptador de repositorio;
+- `adapter/out/messaging`: publicador local sin operaciones utilizado actualmente.
 
-PostgreSQL schema changes are managed by Flyway. Hibernate validates the schema and does not create it. Orders persist their lifecycle status, timestamps, calculated total, currency, lines, and optimistic-lock version.
+Flyway administra los cambios del esquema de PostgreSQL. Hibernate valida el esquema, pero no lo crea. Los pedidos persisten el estado de su ciclo de vida, las marcas temporales, el total calculado, la divisa, las líneas y la versión de bloqueo optimista.
 
-## Code documentation
+## Documentación del código
 
-The [code guide](docs/code-guide.md) explains the end-to-end request paths, every production class,
-domain transitions, persistence mapping, error flow, and test responsibilities. Package-level Javadoc
-describes each architectural area, while class and method Javadoc stays beside the implementation.
+La [guía del código](docs/code-guide.md) explica los recorridos completos de las peticiones, cada clase de producción,
+las transiciones del dominio, el mapeo de persistencia, el flujo de errores y las responsabilidades de las pruebas. El Javadoc de paquete
+describe cada área arquitectónica, mientras que el Javadoc de clases y métodos permanece junto a la implementación.
 
-Generate the browsable API documentation with:
+La documentación navegable de la API se genera con:
 
 ```shell
 ./gradlew javadoc
 ```
 
-The generated entry point is `build/docs/javadoc/index.html`.
+El punto de entrada generado es `build/docs/javadoc/index.html`.
 
-## Running locally
+## Ejecución local
 
-Provide a PostgreSQL database and optionally override these defaults:
+Debe proporcionarse una base de datos PostgreSQL. Estos valores predeterminados se pueden sobrescribir de forma opcional:
 
-| Variable | Default |
+| Variable | Valor predeterminado |
 | --- | --- |
 | `ORDER_DB_URL` | `jdbc:postgresql://localhost:5433/orderflow_orders` |
 | `ORDER_DB_USERNAME` | `orderflow` |
 | `ORDER_DB_PASSWORD` | `orderflow` |
 | `ORDER_SERVICE_PORT` | `8081` |
 
-For local development, `order-service/compose.yaml` defines the `order-postgres` service with a
-healthcheck. Database files survive container replacement in the named `order-postgres-data`
-volume. Port `5433` is used on the host so Inventory PostgreSQL can continue to use `5432`.
+Para el desarrollo local, `order-service/compose.yaml` define el servicio `order-postgres` con una
+comprobación de estado. Los archivos de la base de datos sobreviven al reemplazo del contenedor en el volumen con nombre
+`order-postgres-data`. En el anfitrión se utiliza el puerto `5433` para que el PostgreSQL de Inventory pueda seguir utilizando el `5432`.
 
-Start the database first, then the application:
+Primero se inicia la base de datos y, a continuación, la aplicación:
 
 ```shell
 docker compose up -d --wait order-postgres
 ./gradlew bootRun
 ```
 
-The database can also be managed independently:
+La base de datos también se puede administrar de forma independiente:
 
 ```shell
 docker compose up -d --wait order-postgres
 docker compose down
 ```
 
-Run those commands from `order-service/`. Keeping each service's Compose lifecycle independent
-prevents Spring Boot from discovering two competing PostgreSQL connection definitions.
+Estos comandos deben ejecutarse desde `order-service/`. Mantener independiente el ciclo de vida de Compose de cada servicio
+evita que Spring Boot descubra dos definiciones de conexión de PostgreSQL incompatibles entre sí.
 
-## Testing
+## Pruebas
 
 ```shell
 ./gradlew test
 ```
 
-Domain and ordinary application-service tests run without Spring. Integration tests use a disposable PostgreSQL Testcontainer to verify Flyway, persistence/rehydration, and the REST-to-database path; they are skipped when Docker is unavailable.
+Las pruebas de dominio y las pruebas ordinarias de los servicios de aplicación se ejecutan sin Spring. Las pruebas de integración utilizan un Testcontainer desechable de PostgreSQL para verificar Flyway, la persistencia y rehidratación, y el recorrido desde REST hasta la base de datos; se omiten cuando Docker no está disponible.
 
-## Kafka integration
+## Integración con Kafka
 
-Order publishes `ReserveInventoryCommand` and `ReleaseInventoryCommand` to `order.inventory.commands`, `AuthorizePaymentCommand` to `order.payment.commands`, and final order events to `order.events`. It consumes Inventory and Payment result events using the explicit groups `order-service.inventory-events` and `order-service.payment-events`.
+Order publica `ReserveInventoryCommand` y `ReleaseInventoryCommand` en `order.inventory.commands`, `AuthorizePaymentCommand` en `order.payment.commands` y los eventos finales de pedido en `order.events`. Consume los eventos de resultado de Inventory y Payment mediante los grupos explícitos `order-service.inventory-events` y `order-service.payment-events`.
 
-The Java adapters exchange the same documented JSON contracts consumed and produced by the Kotlin services. Domain events remain separate from integration messages. Order remains the natural home of a future persisted fulfillment Saga, but this increment adds transport only.
+Los adaptadores Java intercambian los mismos contratos JSON documentados que consumen y producen los servicios Kotlin. Los eventos de dominio permanecen separados de los mensajes de integración. Order sigue siendo el lugar natural para una futura saga persistida de cumplimiento, aunque este incremento solo añade el transporte.

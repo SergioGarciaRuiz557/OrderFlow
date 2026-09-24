@@ -1,11 +1,11 @@
 pluginManagement {
     repositories {
-        // Kotlin compiler plugins and their transitive BOM artifacts are published to Maven Central.
+        // Los plugins del compilador de Kotlin y sus artefactos BOM transitivos se publican en Maven Central.
         mavenCentral()
-        // Retains the standard source for Spring Boot and other Gradle plugin marker artifacts.
+        // Conserva la fuente estándar de Spring Boot y de otros artefactos marcadores de plugins de Gradle.
         gradlePluginPortal()
     }
 }
 
-// Defines the independent Gradle build name used in generated artifacts and build output.
+// Define el nombre de compilación Gradle independiente usado en los artefactos generados y la salida de compilación.
 rootProject.name = "inventory-service"

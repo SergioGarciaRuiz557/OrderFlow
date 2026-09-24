@@ -7,33 +7,34 @@ import java.time.Clock
 import java.time.temporal.ChronoUnit
 
 /**
- * Spring dependency configuration for infrastructure-independent time handling.
+ * Configuración de dependencias de Spring para gestionar el tiempo con independencia de la infraestructura.
  *
- * Domain and application classes depend on [ClockProvider], not directly on static system time. This
- * configuration supplies the production UTC clock while unit tests can inject deterministic mock
- * values without loading Spring.
+ * Las clases de dominio y aplicación dependen de [ClockProvider], no directamente de la hora estática
+ * del sistema. Esta configuración proporciona el reloj UTC de producción, mientras que las pruebas
+ * unitarias pueden inyectar valores simulados deterministas sin cargar Spring.
  */
 @Configuration
 class PaymentConfiguration {
     /**
-     * Provides the production wall clock in UTC.
+     * Proporciona el reloj de pared de producción en UTC.
      *
-     * UTC instants avoid server-local time-zone ambiguity in persisted lifecycle timestamps.
+     * Los instantes UTC evitan la ambigüedad de la zona horaria local del servidor en las marcas de tiempo conservadas del ciclo de vida.
      *
-     * @return system clock configured for UTC.
+     * @return reloj del sistema configurado en UTC.
      */
     @Bean
     fun clock(): Clock = Clock.systemUTC()
 
     /**
-     * Adapts Java's [Clock] to the application's minimal outbound time port.
+     * Adapta [Clock] de Java al puerto mínimo de salida de tiempo de la aplicación.
      *
-     * PostgreSQL `TIMESTAMPTZ` commonly stores microsecond precision while [java.time.Instant] can
-     * carry nanoseconds. Truncating at the boundary makes the value returned immediately by a use case
-     * equal to the value reconstructed after a persistence round trip on every supported platform.
+     * `TIMESTAMPTZ` de PostgreSQL suele almacenar precisión de microsegundos, mientras que
+     * [java.time.Instant] puede contener nanosegundos. Truncar en el límite hace que el valor devuelto
+     * inmediatamente por un caso de uso sea igual al reconstruido tras un ciclo completo de
+     * persistencia en todas las plataformas admitidas.
      *
-     * @param clock configured production or test clock.
-     * @return provider whose `now` value is normalized to microsecond precision.
+     * @param clock reloj configurado de producción o de pruebas.
+     * @return proveedor cuyo valor `now` se normaliza con precisión de microsegundos.
      */
     @Bean
     fun clockProvider(clock: Clock): ClockProvider = ClockProvider {

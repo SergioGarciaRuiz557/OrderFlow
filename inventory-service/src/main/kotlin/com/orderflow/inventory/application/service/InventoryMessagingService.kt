@@ -20,9 +20,9 @@ class InventoryMessagingService(
             when (val result = reserveInventory.reserve(ReserveInventoryCommand(item.productId, command.orderId, item.quantity))) {
                 is ReservationResult.Reserved -> accepted += result
                 is ReservationResult.Rejected -> {
-                    // The current domain reserves per product. Restore earlier items if a later
-                    // item rejects so the order-level command never reports rejection with stock
-                    // left allocated from this same attempt.
+                    // El dominio actual reserva por producto. Repone los elementos anteriores si se
+                    // rechaza uno posterior, para que el comando del pedido nunca informe del rechazo
+                    // dejando existencias asignadas por este mismo intento.
                     accepted.forEach { releaseInventory.release(it.reservation.id) }
                     events.inventoryRejected(command.orderId, result)
                     return

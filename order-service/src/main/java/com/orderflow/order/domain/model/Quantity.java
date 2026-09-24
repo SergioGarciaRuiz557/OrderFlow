@@ -3,12 +3,12 @@ package com.orderflow.order.domain.model;
 import com.orderflow.order.domain.exception.DomainInvariantViolationException;
 
 /**
- * Positive number of product units requested by an order line.
+ * Número positivo de unidades de producto solicitadas por una línea de pedido.
  *
- * @param value number of units; must be greater than zero
+ * @param value número de unidades; debe ser mayor que cero
  */
 public record Quantity(int value) {
-    /** Enforces the strictly-positive quantity invariant. */
+    /** Aplica la invariante que exige una cantidad estrictamente positiva. */
     public Quantity {
         if (value <= 0) {
             throw new DomainInvariantViolationException("Quantity must be greater than zero");

@@ -10,7 +10,7 @@ import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 class InventoryMessagingServiceTest {
-    @Test fun `later item rejection releases reservations made by the same order command`() {
+    @Test fun `el rechazo de un elemento posterior libera las reservas del mismo comando de pedido`() {
         val reserve = mockk<ReserveInventoryUseCase>()
         val release = mockk<ReleaseInventoryUseCase>(relaxed = true)
         val repository = mockk<InventoryRepository>(relaxed = true)

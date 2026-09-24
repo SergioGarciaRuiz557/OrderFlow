@@ -5,10 +5,10 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Fact that Inventory accepted the order's reservation.
+ * Hecho que indica que Inventory ha aceptado la reserva del pedido.
  *
- * @param orderId aggregate whose inventory is reserved
- * @param occurredAt callback processing time
+ * @param orderId agregado cuyo inventario está reservado
+ * @param occurredAt instante de procesamiento de la notificación
  */
 public record InventoryReserved(OrderId orderId, Instant occurredAt) implements OrderDomainEvent {
 }

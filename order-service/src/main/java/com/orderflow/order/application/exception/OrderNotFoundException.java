@@ -3,16 +3,16 @@ package com.orderflow.order.application.exception;
 import com.orderflow.order.domain.model.OrderId;
 
 /**
- * Signals that an application use case could not load the requested aggregate.
+ * Indica que un caso de uso de la aplicación no ha podido cargar el agregado solicitado.
  *
- * <p>Keeping this separate from repository or JPA exceptions allows every inbound adapter to map
- * absence according to its own protocol.</p>
+ * <p>Mantenerla separada de las excepciones del repositorio o de JPA permite que cada adaptador de entrada
+ * represente la ausencia según su propio protocolo.</p>
  */
 public class OrderNotFoundException extends RuntimeException {
     /**
-     * Creates an exception whose message includes the missing identity.
+     * Crea una excepción cuyo mensaje incluye la identidad ausente.
      *
-     * @param orderId identifier requested by the caller
+     * @param orderId identificador solicitado por el consumidor
      */
     public OrderNotFoundException(OrderId orderId) {
         super("Order not found: " + orderId);

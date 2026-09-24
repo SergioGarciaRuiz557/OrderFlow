@@ -3,14 +3,14 @@ package com.orderflow.order.domain.model;
 import java.util.Objects;
 
 /**
- * Immutable line belonging to an {@link Order} aggregate.
+ * Línea inmutable perteneciente a un agregado {@link Order}.
  *
- * @param productId product being purchased
- * @param quantity strictly-positive number of units
- * @param unitPrice non-negative price of one unit
+ * @param productId producto que se compra
+ * @param quantity número de unidades estrictamente positivo
+ * @param unitPrice precio no negativo de una unidad
  */
 public record OrderLine(ProductId productId, Quantity quantity, Money unitPrice) {
-    /** Ensures all line components exist even when the line is created outside the REST adapter. */
+    /** Garantiza que existan todos los componentes de la línea aunque esta se cree fuera del adaptador REST. */
     public OrderLine {
         Objects.requireNonNull(productId, "Product id is required");
         Objects.requireNonNull(quantity, "Quantity is required");
@@ -18,9 +18,9 @@ public record OrderLine(ProductId productId, Quantity quantity, Money unitPrice)
     }
 
     /**
-     * Calculates this line's monetary contribution to the order total.
+     * Calcula la aportación monetaria de esta línea al total del pedido.
      *
-     * @return unit price multiplied by quantity
+     * @return precio unitario multiplicado por la cantidad
      */
     public Money subtotal() {
         return unitPrice.multiply(quantity);

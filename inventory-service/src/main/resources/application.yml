@@ -1,20 +1,20 @@
 spring:
   application:
-    # Logical service name exposed through Spring's application environment.
+    # Nombre lógico del servicio expuesto mediante el entorno de aplicación de Spring.
     name: inventory-service
   datasource:
-    # Local defaults support development; environment variables provide deployment-specific secrets.
+    # Los valores locales predeterminados facilitan el desarrollo; las variables de entorno aportan secretos específicos del despliegue.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/inventory}
     username: ${DB_USERNAME:inventory}
     password: ${DB_PASSWORD:inventory}
   jpa:
-    # Prevents web requests from triggering database access after the adapter transaction has ended.
+    # Evita que las solicitudes web accedan a la base de datos después de finalizar la transacción del adaptador.
     open-in-view: false
     hibernate:
-      # Flyway owns DDL; Hibernate only verifies that entity mappings match the migrated schema.
+      # Flyway gestiona el DDL; Hibernate solo comprueba que los mapeos de entidades coincidan con el esquema migrado.
       ddl-auto: validate
   flyway:
-    # Applies versioned migrations before JPA initializes and validates its mappings.
+    # Aplica las migraciones versionadas antes de que JPA inicialice y valide sus mapeos.
     enabled: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

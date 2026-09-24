@@ -5,10 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 
 /**
- * Internal Spring Data repository for persistence entities.
+ * Repositorio interno de Spring Data para entidades de persistencia.
  *
- * <p>Package-private visibility prevents adapters and application services from bypassing
- * {@link JpaOrderRepositoryAdapter} and leaking Spring Data outside the persistence adapter.</p>
+ * <p>La visibilidad de paquete impide que los adaptadores y los servicios de aplicación eludan
+ * {@link JpaOrderRepositoryAdapter} y filtren Spring Data fuera del adaptador de persistencia.</p>
  */
 interface SpringDataOrderRepository extends JpaRepository<JpaOrderEntity, UUID> {
 }

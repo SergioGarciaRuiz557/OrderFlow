@@ -3,74 +3,75 @@ package com.orderflow.inventory.domain.model
 import java.util.UUID
 
 /**
- * Strongly typed identifier of a product whose stock is managed by this bounded context.
+ * Identificador fuertemente tipado de un producto cuyas existencias gestiona este contexto delimitado.
  *
- * A value class prevents a product identifier from being accidentally exchanged with another
- * string-based identifier while normally avoiding an additional allocation at runtime.
+ * Una value class evita que un identificador de producto se intercambie accidentalmente con otro
+ * identificador basado en String y normalmente evita una asignación adicional durante la ejecución.
  *
- * @property value external product identifier used by REST, persistence, and future messages.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value identificador externo del producto utilizado por REST, la persistencia y los mensajes futuros.
+ * @throws IllegalArgumentException cuando [value] está vacío.
  */
 @JvmInline
 value class ProductId(val value: String) {
-    /** Validates the identifier at the boundary of the domain model. */
+    /** Valida el identificador en la frontera del modelo de dominio. */
     init {
         require(value.isNotBlank()) { "Product id must not be blank" }
     }
 }
 
 /**
- * Strongly typed identifier of the order requesting a stock reservation.
+ * Identificador fuertemente tipado del pedido que solicita una reserva de existencias.
  *
- * The inventory aggregate uses this identifier as its business idempotency key: a given order may
- * create at most one reservation for a product.
+ * El agregado de inventario utiliza este identificador como clave de idempotencia de negocio: un
+ * pedido concreto puede crear como máximo una reserva para un producto.
  *
- * @property value identifier assigned by the Order bounded context.
- * @throws IllegalArgumentException when [value] is blank.
+ * @property value identificador asignado por el contexto delimitado Order.
+ * @throws IllegalArgumentException cuando [value] está vacío.
  */
 @JvmInline
 value class OrderId(val value: String) {
-    /** Rejects identifiers that cannot identify a real order. */
+    /** Rechaza identificadores que no pueden representar un pedido real. */
     init {
         require(value.isNotBlank()) { "Order id must not be blank" }
     }
 }
 
 /**
- * Globally unique identifier of a [StockReservation].
+ * Identificador único global de una [StockReservation].
  *
- * Wrapping [UUID] makes APIs explicit about the kind of identifier they accept and prevents mixing
- * reservation identifiers with product or order identifiers.
+ * Encapsular [UUID] hace explícito en las API el tipo de identificador que aceptan y evita mezclar
+ * identificadores de reserva con identificadores de producto o de pedido.
  *
- * @property value UUID persisted as the primary key of the reservation record.
+ * @property value UUID persistido como clave primaria del registro de reserva.
  */
 @JvmInline
 value class ReservationId(val value: UUID) {
-    /** Factory operations for reservation identifiers. */
+    /** Operaciones de factoría para identificadores de reserva. */
     companion object {
         /**
-         * Creates a fresh random identifier for a new reservation attempt.
+         * Crea un identificador aleatorio nuevo para un nuevo intento de reserva.
          *
-         * Existing idempotent reservations retain their original identifier; a generated value is
-         * used only if the aggregate accepts the attempt as a genuinely new reservation.
+         * Las reservas idempotentes existentes conservan su identificador original; solo se utiliza
+         * un valor generado si el agregado acepta el intento como una reserva realmente nueva.
          */
         fun new(): ReservationId = ReservationId(UUID.randomUUID())
     }
 }
 
 /**
- * Positive number of product units requested by a reservation.
+ * Número positivo de unidades de producto solicitado por una reserva.
  *
- * Zero and negative quantities are invalid by construction, so aggregate operations do not need to
- * repeat that check. Available stock is represented separately as an `Int` because zero is valid
- * for a stock level but not for a reservation request.
+ * Las cantidades nulas o negativas no son válidas por construcción, por lo que las operaciones del
+ * agregado no necesitan repetir esa comprobación. Las existencias disponibles se representan por
+ * separado mediante un `Int`, porque cero es válido para un nivel de existencias, pero no para una
+ * solicitud de reserva.
  *
- * @property value number of units to reserve.
- * @throws IllegalArgumentException when [value] is zero or negative.
+ * @property value número de unidades que se reservarán.
+ * @throws IllegalArgumentException cuando [value] es cero o negativo.
  */
 @JvmInline
 value class Quantity(val value: Int) {
-    /** Enforces the positive-reservation invariant when the value enters the domain. */
+    /** Aplica la invariante de reserva positiva cuando el valor entra en el dominio. */
     init {
         require(value > 0) { "Reservation quantity must be positive" }
     }

@@ -32,7 +32,7 @@ class InventoryKafkaIntegrationTest {
     @Autowired lateinit var inventory: GetInventoryUseCase
     @Autowired lateinit var json: ObjectMapper
 
-    @Test fun `reserves rejects and releases through Kafka while preserving metadata and key`() {
+    @Test fun `reserva rechaza y libera mediante Kafka conservando los metadatos y la clave`() {
         stock.setAvailableQuantity(ProductId("PRODUCT-001"), 2)
         consumer("inventory.order.events").use { consumer ->
             val acceptedOrder = UUID.randomUUID()

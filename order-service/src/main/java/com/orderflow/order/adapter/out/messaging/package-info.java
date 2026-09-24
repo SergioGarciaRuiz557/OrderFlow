@@ -1,2 +1,2 @@
-/** Technology-neutral local messaging adapter used until a Kafka adapter is implemented. */
+/** Adaptador local de mensajería independiente de la tecnología que se utiliza cuando Kafka está deshabilitado. */
 package com.orderflow.order.adapter.out.messaging;

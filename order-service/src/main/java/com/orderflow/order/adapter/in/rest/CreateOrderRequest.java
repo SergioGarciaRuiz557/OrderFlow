@@ -12,14 +12,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * JSON request accepted by {@code POST /api/orders}.
+ * Petición JSON aceptada por {@code POST /api/orders}.
  *
- * <p>Bean Validation protects the HTTP boundary and produces useful client errors. Equivalent core
- * invariants are still enforced by domain value objects because other adapters may call the use case.</p>
+ * <p>Bean Validation protege el límite HTTP y produce errores útiles para el cliente. Los objetos de valor del dominio
+ * siguen aplicando las invariantes esenciales equivalentes porque otros adaptadores pueden llamar al caso de uso.</p>
  *
- * @param customerId required customer UUID
- * @param items non-empty, recursively validated item collection
- * @param paymentMethodId required non-blank payment reference
+ * @param customerId UUID obligatorio del cliente
+ * @param items colección de artículos no vacía y validada de forma recursiva
+ * @param paymentMethodId referencia de pago obligatoria y no vacía
  */
 public record CreateOrderRequest(
         @NotNull UUID customerId,
@@ -27,11 +27,11 @@ public record CreateOrderRequest(
         @NotBlank String paymentMethodId) {
 
     /**
-     * One item supplied in the creation request.
+     * Un artículo proporcionado en la petición de creación.
      *
-     * @param productId required catalogue identifier
-     * @param quantity strictly-positive unit count
-     * @param unitPrice required non-negative decimal price; floating-point values are never used
+     * @param productId identificador obligatorio del catálogo
+     * @param quantity número de unidades estrictamente positivo
+     * @param unitPrice precio decimal obligatorio y no negativo; nunca se utilizan valores de coma flotante
      */
     public record Item(
             @NotBlank String productId,

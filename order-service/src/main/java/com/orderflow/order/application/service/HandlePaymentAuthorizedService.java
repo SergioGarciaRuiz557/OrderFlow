@@ -11,22 +11,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-/** Handles successful payment authorization by confirming the referenced order. */
+/** Gestiona una autorización de pago correcta confirmando el pedido referenciado. */
 @Service
 public class HandlePaymentAuthorizedService implements HandlePaymentAuthorizedUseCase {
-    /** Aggregate persistence port. */
+    /** Puerto de persistencia del agregado. */
     private final OrderRepository repository;
-    /** Domain-event publication port. */
+    /** Puerto de publicación de eventos de dominio. */
     private final IntegrationMessagePublisher publisher;
-    /** Business-time provider. */
+    /** Proveedor del tiempo de negocio. */
     private final ClockProvider clock;
 
     /**
-     * Creates the successful-payment callback service.
+     * Crea el servicio de notificación de pago correcto.
      *
-     * @param repository aggregate persistence port
-     * @param publisher domain-event publication port
-     * @param clock business-time port
+     * @param repository puerto de persistencia del agregado
+     * @param publisher puerto de publicación de eventos de dominio
+     * @param clock puerto del tiempo de negocio
      */
     public HandlePaymentAuthorizedService(OrderRepository repository, IntegrationMessagePublisher publisher, ClockProvider clock) {
         this.repository = repository;
@@ -35,9 +35,9 @@ public class HandlePaymentAuthorizedService implements HandlePaymentAuthorizedUs
     }
 
     /**
-     * Loads the order, delegates confirmation rules to the aggregate, persists, and publishes.
+     * Carga el pedido, delega las reglas de confirmación en el agregado, persiste y publica.
      *
-     * @param orderId order referenced by the payment result
+     * @param orderId pedido al que hace referencia el resultado del pago
      */
     @Override
     @Transactional

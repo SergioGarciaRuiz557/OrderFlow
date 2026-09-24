@@ -19,41 +19,41 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Aggregate root that owns the complete business consistency boundary of one order.
+ * Raíz del agregado que posee el límite completo de coherencia de negocio de un pedido.
  *
- * <p>Callers cannot assign {@link OrderStatus} directly. They request business behaviors and this
- * class validates the current state, applies the transition, updates the modification time, and
- * records domain events. Lines and the calculated total are immutable after creation in this first
- * version of the bounded context.</p>
+ * <p>Los consumidores no pueden asignar {@link OrderStatus} directamente. Solicitan comportamientos de negocio y esta
+ * clase valida el estado actual, aplica la transición, actualiza el instante de modificación y
+ * registra eventos de dominio. En esta primera versión del contexto delimitado, las líneas y el total
+ * calculado son inmutables tras la creación.</p>
  *
- * <p>The aggregate contains no persistence or messaging code. {@link #rehydrate} reconstructs saved
- * state without pretending that historical transitions have just happened.</p>
+ * <p>El agregado no contiene código de persistencia ni de mensajería. {@link #rehydrate} reconstruye el estado
+ * guardado sin simular que las transiciones históricas acaban de ocurrir.</p>
  */
 public final class Order {
-    /** Stable aggregate identity. */
+    /** Identidad estable del agregado. */
     private final OrderId id;
-    /** Customer that owns the order. */
+    /** Cliente propietario del pedido. */
     private final CustomerId customerId;
-    /** Immutable snapshot of products, quantities, and unit prices. */
+    /** Instantánea inmutable de productos, cantidades y precios unitarios. */
     private final List<OrderLine> lines;
-    /** Payment reference to use when the saga reaches authorization. */
+    /** Referencia de pago que se utilizará cuando la saga llegue a la autorización. */
     private final PaymentMethodId paymentMethodId;
-    /** Domain-calculated sum of every line subtotal. */
+    /** Suma de los subtotales de todas las líneas calculada por el dominio. */
     private final Money total;
-    /** Time at which the aggregate was originally created. */
+    /** Instante en el que se creó originalmente el agregado. */
     private final Instant createdAt;
-    /** Events produced since the application last pulled them for publication. */
+    /** Eventos producidos desde la última vez que la aplicación los extrajo para publicarlos. */
     private final List<OrderDomainEvent> domainEvents = new ArrayList<>();
-    /** Current lifecycle state; changed only by behavior methods in this class. */
+    /** Estado actual del ciclo de vida; solo lo cambian los métodos de comportamiento de esta clase. */
     private OrderStatus status;
-    /** Time of the latest accepted state transition. */
+    /** Instante de la última transición de estado aceptada. */
     private Instant updatedAt;
-    /** Persistence version used by JPA optimistic locking; null before the first insert. */
+    /** Versión de persistencia utilizada por el bloqueo optimista de JPA; es null antes de la primera inserción. */
     private Long version;
 
     /**
-     * Central constructor shared by creation and rehydration after their specific validations.
-     * It copies the line list so external callers cannot mutate aggregate contents.
+     * Constructor central compartido por la creación y la rehidratación tras sus validaciones específicas.
+     * Copia la lista de líneas para que los consumidores externos no puedan modificar el contenido del agregado.
      */
     private Order(OrderId id, CustomerId customerId, List<OrderLine> lines,
                   PaymentMethodId paymentMethodId, OrderStatus status, Money total,
@@ -73,16 +73,16 @@ public final class Order {
     }
 
     /**
-     * Creates a new pending aggregate and records that creation as a domain fact.
+     * Crea un agregado pendiente nuevo y registra esa creación como un hecho del dominio.
      *
-     * <p>The total is always derived from the supplied lines rather than accepted from a caller.</p>
+     * <p>El total siempre se deriva de las líneas proporcionadas en lugar de aceptarlo de un consumidor.</p>
      *
-     * @param id new aggregate identity
-     * @param customerId customer placing the order
-     * @param lines non-empty order lines
-     * @param paymentMethodId payment reference for later authorization
-     * @param now creation time supplied through the application clock port
-     * @return new aggregate in {@link OrderStatus#PENDING}
+     * @param id identidad nueva del agregado
+     * @param customerId cliente que realiza el pedido
+     * @param lines líneas de pedido no vacías
+     * @param paymentMethodId referencia de pago para su posterior autorización
+     * @param now instante de creación proporcionado mediante el puerto de reloj de la aplicación
+     * @return agregado nuevo en {@link OrderStatus#PENDING}
      */
     public static Order create(OrderId id, CustomerId customerId, List<OrderLine> lines,
                                PaymentMethodId paymentMethodId, Instant now) {
@@ -94,21 +94,21 @@ public final class Order {
     }
 
     /**
-     * Reconstructs an aggregate from persistence without recording new domain events.
+     * Reconstruye un agregado desde la persistencia sin registrar eventos de dominio nuevos.
      *
-     * <p>Rehydration independently recalculates the total and compares it with the persisted total.
-     * A mismatch indicates corrupt or incompatible stored state and is rejected.</p>
+     * <p>La rehidratación vuelve a calcular el total de forma independiente y lo compara con el total persistido.
+     * Una discrepancia indica que el estado almacenado está corrupto o es incompatible, por lo que se rechaza.</p>
      *
-     * @param id persisted aggregate identity
-     * @param customerId persisted customer identity
-     * @param lines persisted lines
-     * @param paymentMethodId persisted payment reference
-     * @param status persisted lifecycle state
-     * @param total persisted total, verified against the lines
-     * @param createdAt original creation time
-     * @param updatedAt latest transition time
-     * @param version optimistic-lock version
-     * @return fully reconstructed aggregate with no pending events
+     * @param id identidad persistida del agregado
+     * @param customerId identidad persistida del cliente
+     * @param lines líneas persistidas
+     * @param paymentMethodId referencia de pago persistida
+     * @param status estado persistido del ciclo de vida
+     * @param total total persistido, verificado con las líneas
+     * @param createdAt instante de creación original
+     * @param updatedAt instante de la última transición
+     * @param version versión de bloqueo optimista
+     * @return agregado completamente reconstruido sin eventos pendientes
      */
     public static Order rehydrate(OrderId id, CustomerId customerId, List<OrderLine> lines,
                                   PaymentMethodId paymentMethodId, OrderStatus status, Money total,
@@ -121,11 +121,11 @@ public final class Order {
     }
 
     /**
-     * Sums every line subtotal using the currency of the first line.
+     * Suma los subtotales de todas las líneas utilizando la divisa de la primera línea.
      *
-     * @param lines lines whose total is required
-     * @return calculated immutable total
-     * @throws DomainInvariantViolationException when no lines are supplied or currencies differ
+     * @param lines líneas cuyo total se necesita
+     * @return total inmutable calculado
+     * @throws DomainInvariantViolationException cuando no se proporcionan líneas o las divisas son distintas
      */
     private static Money calculateTotal(List<OrderLine> lines) {
         if (lines == null || lines.isEmpty()) {
@@ -139,12 +139,12 @@ public final class Order {
     }
 
     /**
-     * Starts inventory reservation for a newly created order.
+     * Inicia la reserva de inventario para un pedido recién creado.
      *
-     * <p>A duplicate call while reservation is already pending is a no-op because it represents the
-     * same business intent. Every other unexpected state is rejected.</p>
+     * <p>Una llamada duplicada mientras la reserva ya está pendiente no realiza ninguna operación porque representa
+     * la misma intención de negocio. Cualquier otro estado inesperado se rechaza.</p>
      *
-     * @param now transition time
+     * @param now instante de la transición
      */
     public void requestInventoryReservation(Instant now) {
         if (status == OrderStatus.INVENTORY_RESERVATION_PENDING) {
@@ -156,12 +156,12 @@ public final class Order {
     }
 
     /**
-     * Applies a successful inventory callback.
+     * Aplica una notificación correcta del inventario.
      *
-     * <p>Later successful states are accepted as idempotent re-delivery. The method does not request
-     * payment itself; that orchestration belongs to the inventory-result application service.</p>
+     * <p>Los estados satisfactorios posteriores se aceptan como una reentrega idempotente. El método no solicita
+     * el pago por sí mismo; esa orquestación pertenece al servicio de aplicación del resultado del inventario.</p>
      *
-     * @param now transition time
+     * @param now instante de la transición
      */
     public void markInventoryReserved(Instant now) {
         if (status == OrderStatus.INVENTORY_RESERVED || status == OrderStatus.PAYMENT_PENDING || status == OrderStatus.CONFIRMED) {
@@ -173,10 +173,10 @@ public final class Order {
     }
 
     /**
-     * Applies a failed inventory callback and terminates the order as cancelled.
+     * Aplica una notificación fallida del inventario y finaliza el pedido como cancelado.
      *
-     * @param reason external business reason, normalized to {@code unspecified} when blank
-     * @param now transition time
+     * @param reason motivo de negocio externo, normalizado a {@code unspecified} cuando está vacío
+     * @param now instante de la transición
      */
     public void markInventoryRejected(String reason, Instant now) {
         if (status == OrderStatus.CANCELLED) {
@@ -189,12 +189,12 @@ public final class Order {
     }
 
     /**
-     * Requests payment only after inventory is known to be reserved.
+     * Solicita el pago únicamente después de confirmar que el inventario está reservado.
      *
-     * <p>Calling the method again while payment is pending is idempotent. Calling it before inventory
-     * reservation is explicitly rejected to protect the saga ordering invariant.</p>
+     * <p>Volver a llamar al método mientras el pago está pendiente es idempotente. Se rechaza expresamente llamarlo antes
+     * de reservar el inventario para proteger la invariante de ordenación de la saga.</p>
      *
-     * @param now transition time
+     * @param now instante de la transición
      */
     public void requestPaymentAuthorization(Instant now) {
         if (status == OrderStatus.PAYMENT_PENDING) {
@@ -206,12 +206,12 @@ public final class Order {
     }
 
     /**
-     * Applies successful payment authorization and confirms the order.
+     * Aplica una autorización de pago correcta y confirma el pedido.
      *
-     * <p>Authorization and confirmation are emitted as separate facts so future integrations can
-     * react at the appropriate semantic level. Re-delivery after confirmation is a no-op.</p>
+     * <p>La autorización y la confirmación se emiten como hechos separados para que las integraciones puedan
+     * reaccionar en el nivel semántico adecuado. Una reentrega posterior a la confirmación no realiza ninguna operación.</p>
      *
-     * @param now transition time
+     * @param now instante de la transición
      */
     public void markPaymentAuthorized(Instant now) {
         if (status == OrderStatus.CONFIRMED) {
@@ -224,13 +224,13 @@ public final class Order {
     }
 
     /**
-     * Applies failed payment authorization and starts inventory compensation.
+     * Aplica una autorización de pago fallida e inicia la compensación del inventario.
      *
-     * <p>The order remains in {@link OrderStatus#CANCELLATION_PENDING} until a future flow confirms
-     * compensation. An {@link InventoryReleaseRequested} event expresses the required action.</p>
+     * <p>El pedido permanece en {@link OrderStatus#CANCELLATION_PENDING} hasta que otro flujo confirme
+     * la compensación. Un evento {@link InventoryReleaseRequested} expresa la acción requerida.</p>
      *
-     * @param reason payment rejection reason, normalized when blank
-     * @param now transition time
+     * @param reason motivo del rechazo del pago, normalizado cuando está vacío
+     * @param now instante de la transición
      */
     public void markPaymentRejected(String reason, Instant now) {
         if (status == OrderStatus.CANCELLATION_PENDING || status == OrderStatus.CANCELLED) {
@@ -243,15 +243,15 @@ public final class Order {
     }
 
     /**
-     * Requests cancellation before the order has been confirmed.
+     * Solicita la cancelación antes de que se haya confirmado el pedido.
      *
-     * <p>If inventory may already be reserved, the method also records a compensation request.
-     * Confirmed orders are deliberately rejected because cancelling them requires a different future
-     * post-confirmation business process.</p>
+     * <p>Si el inventario puede estar ya reservado, el método registra también una solicitud de compensación.
+     * Los pedidos confirmados se rechazan deliberadamente porque cancelarlos requiere un proceso de negocio
+     * posterior a la confirmación distinto.</p>
      *
-     * @param reason caller context for the request; this first version does not persist it, so the
-     *               definitive reason must be supplied again when cancellation is confirmed
-     * @param now transition time
+     * @param reason contexto de la solicitud aportado por el consumidor; esta primera versión no lo persiste, por lo que el
+     *               motivo definitivo debe proporcionarse de nuevo al confirmar la cancelación
+     * @param now instante de la transición
      */
     public void requestCancellation(String reason, Instant now) {
         if (status == OrderStatus.CANCELLATION_PENDING || status == OrderStatus.CANCELLED) {
@@ -268,10 +268,10 @@ public final class Order {
     }
 
     /**
-     * Completes a previously requested cancellation.
+     * Completa una cancelación solicitada previamente.
      *
-     * @param reason final cancellation reason, normalized when blank
-     * @param now transition time
+     * @param reason motivo final de la cancelación, normalizado cuando está vacío
+     * @param now instante de la transición
      */
     public void confirmCancellation(String reason, Instant now) {
         if (status == OrderStatus.CANCELLED) {
@@ -283,10 +283,10 @@ public final class Order {
     }
 
     /**
-     * Guards a transition that is valid from exactly one state.
+     * Protege una transición que solo es válida desde un estado concreto.
      *
-     * @param expected required current state
-     * @param message business explanation used if the guard fails
+     * @param expected estado actual requerido
+     * @param message explicación de negocio utilizada si falla la protección
      */
     private void requireStatus(OrderStatus expected, String message) {
         if (status != expected) {
@@ -294,24 +294,24 @@ public final class Order {
         }
     }
 
-    /** Assigns the validated next state and its transition time as one internal operation. */
+    /** Asigna el siguiente estado validado y el instante de su transición en una sola operación interna. */
     private void transitionTo(OrderStatus newStatus, Instant now) {
         status = newStatus;
         updatedAt = Objects.requireNonNull(now, "Transition time is required");
     }
 
-    /** Converts absent or blank external reasons into a stable domain value. */
+    /** Convierte los motivos externos ausentes o vacíos en un valor estable del dominio. */
     private String normalizedReason(String reason) {
         return reason == null || reason.isBlank() ? "unspecified" : reason.trim();
     }
 
     /**
-     * Returns all events produced since the previous pull and clears the internal buffer.
+     * Devuelve todos los eventos producidos desde la extracción anterior y limpia el búfer interno.
      *
-     * <p>Clearing prevents the same aggregate instance from publishing an event twice. Application
-     * services call this only after persistence succeeds.</p>
+     * <p>La limpieza evita que la misma instancia del agregado publique un evento dos veces. Los servicios
+     * de aplicación solo llaman a este método después de que la persistencia finalice correctamente.</p>
      *
-     * @return immutable snapshot of currently pending events
+     * @return instantánea inmutable de los eventos pendientes actuales
      */
     public List<OrderDomainEvent> pullDomainEvents() {
         List<OrderDomainEvent> events = List.copyOf(domainEvents);
@@ -320,57 +320,57 @@ public final class Order {
     }
 
     /**
-     * Returns this aggregate's identity.
+     * Devuelve la identidad de este agregado.
      *
-     * @return aggregate identity
+     * @return identidad del agregado
      */
     public OrderId id() { return id; }
     /**
-     * Returns the owning customer.
+     * Devuelve el cliente propietario.
      *
-     * @return customer that owns the order
+     * @return cliente propietario del pedido
      */
     public CustomerId customerId() { return customerId; }
     /**
-     * Returns the immutable purchase terms.
+     * Devuelve las condiciones inmutables de la compra.
      *
-     * @return immutable order-line snapshot
+     * @return instantánea inmutable de las líneas del pedido
      */
     public List<OrderLine> lines() { return lines; }
     /**
-     * Returns the future authorization reference.
+     * Devuelve la referencia para la autorización posterior.
      *
-     * @return payment method reference
+     * @return referencia del método de pago
      */
     public PaymentMethodId paymentMethodId() { return paymentMethodId; }
     /**
-     * Returns the domain-controlled state.
+     * Devuelve el estado controlado por el dominio.
      *
-     * @return current lifecycle state
+     * @return estado actual del ciclo de vida
      */
     public OrderStatus status() { return status; }
     /**
-     * Returns the sum calculated from all lines.
+     * Devuelve la suma calculada a partir de todas las líneas.
      *
-     * @return domain-calculated total
+     * @return total calculado por el dominio
      */
     public Money total() { return total; }
     /**
-     * Returns when the aggregate began.
+     * Devuelve cuándo se inició el agregado.
      *
-     * @return creation time
+     * @return instante de creación
      */
     public Instant createdAt() { return createdAt; }
     /**
-     * Returns when state last changed.
+     * Devuelve cuándo cambió el estado por última vez.
      *
-     * @return time of the latest transition
+     * @return instante de la última transición
      */
     public Instant updatedAt() { return updatedAt; }
     /**
-     * Returns the concurrency token.
+     * Devuelve el token de concurrencia.
      *
-     * @return persistence version, or null before the first save
+     * @return versión de persistencia, o null antes del primer guardado
      */
     public Long version() { return version; }
 }

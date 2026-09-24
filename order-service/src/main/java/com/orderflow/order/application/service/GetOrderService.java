@@ -9,26 +9,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-/** Read-only implementation of the order retrieval use case. */
+/** Implementación de solo lectura del caso de uso de consulta de pedidos. */
 @Service
 public class GetOrderService implements GetOrderUseCase {
-    /** Persistence boundary used to load the aggregate. */
+    /** Límite de persistencia utilizado para cargar el agregado. */
     private final OrderRepository repository;
 
     /**
-     * Creates the query service.
+     * Crea el servicio de consulta.
      *
-     * @param repository aggregate persistence port
+     * @param repository puerto de persistencia del agregado
      */
     public GetOrderService(OrderRepository repository) {
         this.repository = repository;
     }
 
     /**
-     * Loads an order and flattens it into an adapter-independent application view.
+     * Carga un pedido y lo aplana en una vista de la aplicación independiente del adaptador.
      *
-     * @param orderId external UUID supplied by the inbound adapter
-     * @return current representation
+     * @param orderId UUID externo proporcionado por el adaptador de entrada
+     * @return representación actual
      */
     @Override
     @Transactional(readOnly = true)

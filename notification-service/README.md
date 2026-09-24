@@ -1,68 +1,70 @@
-# Notification Service
+# Servicio de notificaciones
 
-Kafka is the primary inbound integration mechanism. The `notification-service.order-events` group consumes `OrderConfirmedEvent` and `OrderCancelledEvent` from `order.events`; the listener validates/maps each JSON envelope and invokes the existing confirmation or cancellation notification input port. Notification terminates the current flow and therefore has no Kafka producer.
+Kafka es el mecanismo principal de integración de entrada. El grupo `notification-service.order-events` consume `OrderConfirmedEvent` y `OrderCancelledEvent` desde `order.events`; el consumidor valida y transforma cada sobre JSON e invoca el puerto de entrada existente para notificaciones de confirmación o cancelación. Notificaciones pone fin al flujo actual y, por tanto, no tiene productor de Kafka.
 
-- **Bounded Context:** Notification
-- **Language:** Kotlin
-- **Architecture:** Hexagonal Architecture
-- **Delivery:** Stateless fake email adapter
+- **Contexto delimitado:** Notificaciones
+- **Lenguaje:** Kotlin
+- **Arquitectura:** arquitectura hexagonal
+- **Entrega:** adaptador de correo electrónico simulado y sin estado
 
-## Responsibility
+## Responsabilidad
 
-Notification Service creates and delivers customer-facing messages for final order lifecycle events.
-It currently supports deterministic order confirmation and order cancellation notifications.
+El servicio de notificaciones crea y entrega mensajes destinados al cliente ante los eventos finales del ciclo de vida de un pedido. Actualmente admite notificaciones deterministas de confirmación y cancelación de pedidos.
 
-The service has no REST API. Its inbound mechanism is asynchronous Kafka messaging.
+El servicio no tiene una API REST. Su mecanismo de entrada es la mensajería asíncrona mediante Kafka.
 
-## Architectural structure
+## Estructura arquitectónica
 
-- `domain/model`: the small provider-neutral notification model (`Notification`, `NotificationType`,
-  `OrderId`, and validated email `Recipient`).
-- `application/port/in`: `SendOrderConfirmedNotificationUseCase` and
-  `SendOrderCancelledNotificationUseCase`, plus their immutable commands. These boundaries do not
-  contain Kafka or other transport types.
-- `application/service`: the corresponding orchestration services and deterministic
-  `OrderNotificationFactory` for message content.
-- `application/port/out`: `NotificationSender`, the delivery capability required by the application,
-  and its notification-specific technical failure type.
-- `adapter/out/external`: `FakeEmailNotificationSender`, which logs the recipient, notification type,
-  order id, and message while requiring no provider account or external infrastructure.
+- `domain/model`: el pequeño modelo de notificación independiente del proveedor (`Notification`,
+  `NotificationType`, `OrderId` y el correo validado `Recipient`).
+- `application/port/in`: `SendOrderConfirmedNotificationUseCase` y
+  `SendOrderCancelledNotificationUseCase`, junto con sus comandos inmutables. Estos límites no
+  contienen Kafka ni otros tipos de transporte.
+- `application/service`: los servicios de orquestación correspondientes y
+  `OrderNotificationFactory`, que genera de forma determinista el contenido del mensaje.
+- `application/port/out`: `NotificationSender`, la capacidad de entrega que necesita la aplicación,
+  y su tipo de fallo técnico específico de notificaciones.
+- `adapter/out/external`: `FakeEmailNotificationSender`, que registra el destinatario, el tipo de
+  notificación, el identificador del pedido y el mensaje sin necesitar una cuenta de proveedor ni
+  infraestructura externa.
 
-Delivery exceptions are propagated. They are not translated into order cancellation or another
-business outcome, allowing the Kafka consumer to fail processing without acknowledging the record.
+Las excepciones de entrega se propagan. No se convierten en una cancelación del pedido ni en otro
+resultado de negocio, lo que permite que el consumidor de Kafka falle sin confirmar el registro.
 
-## Persistence decision
+## Decisión sobre persistencia
 
-The initial service is deliberately stateless:
+El servicio inicial carece de estado de forma deliberada:
 
 ```text
-application input port -> application service -> NotificationSender
+puerto de entrada de aplicación -> servicio de aplicación -> NotificationSender
 ```
 
-There is no database, JPA, Flyway, or delivery-status model because the current requirement is to
-send a notification, not to provide an audit history. Auditing can be added later if it becomes an
-explicit business requirement.
+No existen una base de datos, JPA, Flyway ni un modelo del estado de entrega porque el requisito
+actual es enviar una notificación, no proporcionar un historial de auditoría. La auditoría podrá
+añadirse más adelante si se convierte en un requisito de negocio explícito.
 
-## Kafka integration
+## Integración con Kafka
 
-Adapters under `adapter/in/kafka` consume `OrderConfirmedEvent` and `OrderCancelledEvent`, map their
-payloads to application commands, and invoke the corresponding input ports. Listeners remain thin;
-message construction and delivery orchestration stay in the application layer. No outbound Kafka
-adapter exists because Notification currently terminates the workflow.
+Los adaptadores de `adapter/in/kafka` consumen `OrderConfirmedEvent` y `OrderCancelledEvent`, transforman
+sus cargas útiles en comandos de aplicación e invocan los puertos de entrada correspondientes. Los
+consumidores se mantienen ligeros; la construcción del mensaje y la orquestación de la entrega
+permanecen en la capa de aplicación. No existe un adaptador de salida de Kafka porque Notificaciones
+finaliza actualmente el flujo de trabajo.
 
-## Why the domain is intentionally simple
+## Por qué el dominio es sencillo de forma intencionada
 
-Domain-Driven Design is applied according to actual domain complexity. Order, Inventory, and Payment
-need richer models because they enforce significant business invariants. Notification currently acts
-primarily as an application and integration capability, so it does not justify aggregates, domain
-services, persistence statuses, or policies with no behavior behind them.
+El diseño guiado por el dominio se aplica de acuerdo con la complejidad real del dominio. Pedidos,
+Inventario y Pagos necesitan modelos más ricos porque aplican invariantes de negocio importantes.
+Notificaciones actúa actualmente sobre todo como capacidad de aplicación e integración, por lo que
+no justifica agregados, servicios de dominio, estados de persistencia ni políticas sin comportamiento.
 
-The lightweight model still gives meaningful concepts explicit names and keeps application and
-infrastructure boundaries clear. This is a deliberate design decision, not an architectural omission.
+El modelo ligero sigue dando nombres explícitos a conceptos relevantes y mantiene claros los
+límites entre aplicación e infraestructura. Es una decisión de diseño deliberada, no una omisión
+arquitectónica.
 
-## Build and test
+## Compilación y pruebas
 
-From this directory:
+Desde este directorio:
 
 ```shell
 ./gradlew test

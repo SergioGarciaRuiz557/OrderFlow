@@ -1,45 +1,45 @@
-# Kafka messaging
+# Mensajería Kafka
 
-Kafka is the asynchronous integration boundary between Order, Inventory, Payment, and Notification. Commands request work in another bounded context; events report a definitive business fact. Every service owns its local transport DTOs, and no compiled contract or domain library is shared.
+Kafka es la frontera de integración asíncrona entre Order, Inventory, Payment y Notification. Los comandos solicitan trabajo en otro contexto delimitado; los eventos comunican un hecho de negocio definitivo. Cada servicio es propietario de sus DTO de transporte locales y no se comparte ningún contrato compilado ni biblioteca de dominio.
 
 ```mermaid
 flowchart LR
-    O[Order Service] -->|inventory commands| K[(Kafka)]
-    K --> I[Inventory Service]
-    I -->|inventory events| K
+    O[Servicio Order] -->|comandos de inventario| K[(Kafka)]
+    K --> I[Servicio Inventory]
+    I -->|eventos de inventario| K
     K --> O
-    O -->|payment commands| K
-    K --> P[Payment Service]
-    P -->|payment events| K
+    O -->|comandos de pago| K
+    K --> P[Servicio Payment]
+    P -->|eventos de pago| K
     K --> O
-    O -->|order events| K
-    K --> N[Notification Service]
+    O -->|eventos de pedido| K
+    K --> N[Servicio Notification]
 ```
 
-## Envelope and metadata
+## Estructura y metadatos
 
-Every JSON record contains `messageId`, `messageType`, `correlationId`, nullable `causationId`, `aggregateId`, UTC `occurredAt`, `version`, and `payload`. Version 1 is the initial contract. `messageType` is the wire discriminator; Java/Kotlin package names and serializer type headers are not contracts.
+Cada registro JSON contiene `messageId`, `messageType`, `correlationId`, el campo anulable `causationId`, `aggregateId`, `occurredAt` en UTC, `version` y `payload`. La versión 1 es el contrato inicial. `messageType` es el discriminador en el protocolo; los nombres de paquetes Java/Kotlin y las cabeceras de tipo del serializador no forman parte del contrato.
 
-For the current workflow, `correlationId` and `aggregateId` are the Order UUID. A newly produced result gets a new `messageId`, preserves the incoming correlation, and uses the incoming `messageId` as `causationId`. Root messages have a null cause.
+En el flujo de trabajo actual, `correlationId` y `aggregateId` son el UUID de Order. Un resultado recién generado obtiene un nuevo `messageId`, conserva la correlación entrante y utiliza el `messageId` entrante como `causationId`. Los mensajes raíz tienen una causa nula.
 
-Every record uses `orderId` as its Kafka key. The same key on the same topic normally selects the same partition, so Kafka provides ordering within that partition. It does not provide global ordering across topics or the entire distributed workflow.
+Cada registro utiliza `orderId` como clave de Kafka. La misma clave en el mismo topic selecciona normalmente la misma partición, por lo que Kafka garantiza el orden dentro de esa partición. No garantiza un orden global entre topics ni en todo el flujo de trabajo distribuido.
 
-## Delivery behavior
+## Comportamiento de entrega
 
-Consumers use explicit groups, disable automatic commits, and acknowledge in `RECORD` mode only after the listener and application handler return successfully. Producers use string keys, JSON string values, and `acks=all`. The result is at-least-once-capable delivery: duplicates remain possible and generic `messageId` deduplication is intentionally deferred.
+Los consumidores utilizan grupos explícitos, desactivan las confirmaciones automáticas y confirman en modo `RECORD` únicamente después de que el consumidor y el manejador de aplicación finalicen correctamente. Los productores utilizan claves de tipo String, valores JSON de tipo String y `acks=all`. El resultado es una entrega con capacidad at-least-once: los duplicados siguen siendo posibles y la deduplicación genérica mediante `messageId` se ha pospuesto deliberadamente.
 
-Local/test topics use three partitions and replication factor 1. Production provisioning should retain these names, choose capacity deliberately, and use a larger replication factor. Broker automatic topic creation is not a production provisioning strategy.
+Los topics locales y de pruebas utilizan tres particiones y un factor de replicación 1. El aprovisionamiento de producción debe conservar estos nombres, elegir la capacidad de forma deliberada y utilizar un factor de replicación mayor. La creación automática de topics por el broker no es una estrategia de aprovisionamiento para producción.
 
-## Known limitations
+## Limitaciones conocidas
 
-- A local database commit and Kafka publication are not atomic; Transactional Outbox is deferred.
-- Generic processed-message/idempotency storage is not implemented.
-- There is no project retry-topic or Dead Letter Topic policy.
-- The complete distributed process is not an explicit persisted Saga/Process Manager.
-- Notification currently receives customer identity, but no customer-contact lookup exists; the adapter uses a non-routable development address until that integration is introduced.
+- Un commit en la base de datos local y una publicación en Kafka no son operaciones atómicas; Transactional Outbox se ha pospuesto.
+- No se ha implementado un almacenamiento genérico de mensajes procesados o de idempotencia.
+- El proyecto no dispone de una política de retry topics o Dead Letter Topics.
+- El proceso distribuido completo no es una Saga/Process Manager explícita y persistida.
+- Notification recibe actualmente la identidad del cliente, pero no existe una consulta de sus datos de contacto; el adaptador utiliza una dirección de desarrollo no enrutable hasta que se incorpore esa integración.
 
-These are deliberate boundaries of this Kafka-only increment. There are no Kafka transactions, exactly-once claims, Schema Registry, Avro, Protobuf, or Java native serialization.
+Estos son límites deliberados de este incremento centrado exclusivamente en Kafka. No hay transacciones Kafka, garantías exactly-once, Schema Registry, Avro, Protobuf ni serialización nativa de Java.
 
-## Local inspection
+## Inspección local
 
-Set `KAFKA_BOOTSTRAP_SERVERS`, start each service with its PostgreSQL dependency, and use any standard Kafka console consumer with `--property print.key=true`. Automated Kafka tests start their own broker with Testcontainers and do not require this setup.
+Configure `KAFKA_BOOTSTRAP_SERVERS`, inicie cada servicio con su dependencia de PostgreSQL y utilice cualquier consumidor estándar de consola de Kafka con `--property print.key=true`. Las pruebas automatizadas de Kafka inician su propio broker mediante Testcontainers y no requieren esta configuración.

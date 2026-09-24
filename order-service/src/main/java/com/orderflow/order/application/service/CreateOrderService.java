@@ -20,30 +20,30 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Transactional implementation of {@link CreateOrderUseCase}.
+ * Implementación transaccional de {@link CreateOrderUseCase}.
  *
- * <p>The service maps command primitives to validated domain objects, creates the aggregate, asks it
- * to begin inventory reservation, persists it, and publishes its domain facts. Pricing and state
- * transition rules remain inside {@link Order}.</p>
+ * <p>El servicio mapea los valores primitivos del comando a objetos de dominio validados, crea el agregado, le pide
+ * que inicie la reserva del inventario, lo persiste y publica sus hechos de dominio. Las reglas de valoración y
+ * transición de estado permanecen dentro de {@link Order}.</p>
  */
 @Service
 public class CreateOrderService implements CreateOrderUseCase {
-    /** Stores the aggregate through a hexagonal output port. */
+    /** Almacena el agregado mediante un puerto de salida hexagonal. */
     private final OrderRepository repository;
-    /** Delivers newly produced domain facts without exposing a transport. */
+    /** Entrega los hechos de dominio recién producidos sin exponer un transporte. */
     private final IntegrationMessagePublisher publisher;
-    /** Supplies one deterministic time for creation and the initial request. */
+    /** Proporciona un instante determinista para la creación y la solicitud inicial. */
     private final ClockProvider clock;
-    /** Supplies a new Order identity. */
+    /** Proporciona una identidad nueva de Order. */
     private final OrderIdGenerator idGenerator;
 
     /**
-     * Creates the service with all nondeterministic and infrastructure dependencies injected.
+     * Crea el servicio con todas las dependencias no deterministas y de infraestructura inyectadas.
      *
-     * @param repository aggregate persistence port
-     * @param publisher domain-event publication port
-     * @param clock business-time port
-     * @param idGenerator identity-generation port
+     * @param repository puerto de persistencia del agregado
+     * @param publisher puerto de publicación de eventos de dominio
+     * @param clock puerto del tiempo de negocio
+     * @param idGenerator puerto de generación de identidades
      */
     public CreateOrderService(OrderRepository repository, IntegrationMessagePublisher publisher,
                               ClockProvider clock, OrderIdGenerator idGenerator) {
@@ -54,20 +54,20 @@ public class CreateOrderService implements CreateOrderUseCase {
     }
 
     /**
-     * Creates and persists an order in inventory-reservation-pending state.
+     * Crea y persiste un pedido en estado de reserva de inventario pendiente.
      *
-     * @param command customer, item, and payment data
-     * @return application representation of the created order
+     * @param command datos del cliente, los artículos y el pago
+     * @return representación del pedido creado en la aplicación
      */
     @Override
     @Transactional
     public OrderView create(CreateOrderCommand command) {
-        // Conversion invokes value-object constructors, so domain validation does not depend on HTTP.
+        // La conversión invoca los constructores de los objetos de valor, por lo que la validación del dominio no depende de HTTP.
         List<OrderLine> lines = command.items().stream()
                 .map(item -> new OrderLine(new ProductId(item.productId()), new Quantity(item.quantity()),
                         Money.eur(item.unitPrice())))
                 .toList();
-        // A single instant gives creation and its immediate inventory request a coherent timestamp.
+        // Un solo instante proporciona una marca temporal coherente a la creación y a su solicitud inmediata de inventario.
         Instant now = clock.now();
         Order order = Order.create(idGenerator.nextId(), new CustomerId(command.customerId()), lines,
                 new PaymentMethodId(command.paymentMethodId()), now);

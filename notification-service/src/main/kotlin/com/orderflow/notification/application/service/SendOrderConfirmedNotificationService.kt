@@ -6,18 +6,19 @@ import com.orderflow.notification.application.port.`out`.NotificationSender
 import org.springframework.stereotype.Service
 
 /**
- * Application service that coordinates the order-confirmed notification use case.
+ * Servicio de aplicación que coordina el caso de uso de notificación de pedido confirmado.
  *
- * The service performs exactly two application-level steps: it asks [OrderNotificationFactory] to
- * create provider-neutral content and passes that content to [NotificationSender]. It contains no
- * Kafka deserialization, email API calls, logging, or persistence logic.
+ * El servicio realiza exactamente dos pasos en el nivel de aplicación: pide a
+ * [OrderNotificationFactory] que cree contenido independiente del proveedor y pasa ese contenido a
+ * [NotificationSender]. No contiene deserialización de Kafka, llamadas a una API de correo,
+ * registro ni lógica de persistencia.
  *
- * [Service] makes this implementation available to Spring as the concrete bean for
- * [SendOrderConfirmedNotificationUseCase]. Constructor injection makes both dependencies explicit
- * and allows unit tests to supply a mocked sender without starting Spring.
+ * [Service] pone esta implementación a disposición de Spring como bean concreto de
+ * [SendOrderConfirmedNotificationUseCase]. La inyección por constructor hace explícitas ambas
+ * dependencias y permite que las pruebas unitarias proporcionen un emisor simulado sin iniciar Spring.
  *
- * @property notificationFactory creates deterministic confirmation content.
- * @property notificationSender outbound delivery boundary implemented by an external adapter.
+ * @property notificationFactory crea contenido de confirmación determinista.
+ * @property notificationSender límite de entrega de salida implementado por un adaptador externo.
  */
 @Service
 class SendOrderConfirmedNotificationService(
@@ -25,21 +26,22 @@ class SendOrderConfirmedNotificationService(
     private val notificationSender: NotificationSender,
 ) : SendOrderConfirmedNotificationUseCase {
     /**
-     * Executes one confirmation-notification request.
+     * Ejecuta una solicitud de notificación de confirmación.
      *
-     * A successful return means the configured sender completed normally. Delivery exceptions are
-     * intentionally not caught or converted here; preserving the technical failure allows a future
-     * Kafka consumer to own retries and acknowledgement behavior.
+     * Un retorno correcto significa que el emisor configurado terminó con normalidad. Las
+     * excepciones de entrega no se capturan ni convierten aquí de forma intencionada; conservar el
+     * fallo técnico permite que un futuro consumidor de Kafka controle los reintentos y las
+     * confirmaciones.
      *
-     * @param command validated order and recipient data from the input boundary.
-     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException when
-     * the outbound adapter reports a technical delivery failure.
+     * @param command datos validados del pedido y destinatario procedentes del límite de entrada.
+     * @throws com.orderflow.notification.application.port.out.NotificationDeliveryException cuando
+     * el adaptador de salida informa de un fallo técnico de entrega.
      */
     override fun send(command: SendOrderConfirmedNotificationCommand) {
-        // Translate the use-case command into the complete model required by the outbound port.
+        // Traduce el comando del caso de uso al modelo completo que necesita el puerto de salida.
         val notification = notificationFactory.confirmed(command.orderId, command.recipient)
 
-        // Delegate delivery through the port; this service has no knowledge of the fake email adapter.
+        // Delega la entrega mediante el puerto; este servicio desconoce el adaptador de correo simulado.
         notificationSender.send(notification)
     }
 }

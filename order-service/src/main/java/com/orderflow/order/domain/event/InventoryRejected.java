@@ -5,11 +5,11 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Fact that Inventory could not reserve the requested products.
+ * Hecho que indica que Inventory no ha podido reservar los productos solicitados.
  *
- * @param orderId rejected aggregate
- * @param reason normalized business explanation
- * @param occurredAt callback processing time
+ * @param orderId agregado rechazado
+ * @param reason explicación de negocio normalizada
+ * @param occurredAt instante de procesamiento de la notificación
  */
 public record InventoryRejected(OrderId orderId, String reason, Instant occurredAt) implements OrderDomainEvent {
 }

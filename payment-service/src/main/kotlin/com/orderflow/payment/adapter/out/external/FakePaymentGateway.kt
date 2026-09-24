@@ -9,37 +9,37 @@ import com.orderflow.payment.domain.model.PaymentProviderReference
 import org.springframework.stereotype.Component
 
 /**
- * Deterministic development and test adapter for the [PaymentGateway] output port.
+ * Adaptador determinista de desarrollo y pruebas para el puerto de salida [PaymentGateway].
  *
- * This component simulates a provider without network access, secrets, randomness, or timing-based
- * behavior. Its result depends only on [PaymentGatewayRequest.paymentMethodId], which makes local
- * runs and automated tests reproducible. It demonstrates the required semantic boundary: a known
- * provider decline is returned as a business result, while an unavailable/failed provider throws a
- * technical [PaymentGatewayException].
+ * Este componente simula un proveedor sin acceso a la red, secretos, aleatoriedad ni comportamiento
+ * basado en el tiempo. Su resultado solo depende de [PaymentGatewayRequest.paymentMethodId], lo que
+ * hace reproducibles las ejecuciones locales y las pruebas automatizadas. Demuestra el límite
+ * semántico requerido: un rechazo conocido del proveedor se devuelve como resultado de negocio,
+ * mientras que un proveedor no disponible o con fallos lanza una [PaymentGatewayException] técnica.
  *
- * This adapter is not a REST endpoint and does not define the future inbound integration mechanism.
- * Replacing it with a real provider requires another adapter implementing the same port contract;
- * domain and application code do not change.
+ * Este adaptador no es un endpoint REST ni define el futuro mecanismo de integración de entrada.
+ * Sustituirlo por un proveedor real requiere otro adaptador que implemente el mismo contrato del
+ * puerto; el código de dominio y de aplicación no cambia.
  */
 @Component
 class FakePaymentGateway : PaymentGateway {
     /**
-     * Simulates provider authorization according to well-known development payment-method tokens.
+     * Simula la autorización del proveedor según tokens conocidos de métodos de pago de desarrollo.
      *
-     * - `pm-test-success` returns an authorization reference derived from the stable idempotency key.
-     * - `pm-test-rejected` returns a definitive business rejection.
-     * - `pm-test-error` throws a technical exception and therefore leaves the payment retryable.
-     * - Any other token is treated as a known unsupported-method business rejection.
+     * - `pm-test-success` devuelve una referencia de autorización derivada de la clave de idempotencia estable.
+     * - `pm-test-rejected` devuelve un rechazo de negocio definitivo.
+     * - `pm-test-error` lanza una excepción técnica y, por tanto, deja el pago disponible para reintentos.
+     * - Cualquier otro token se trata como un rechazo de negocio conocido por método no admitido.
      *
-     * @param request provider-neutral request created by the application service.
-     * @return deterministic successful or rejected business outcome.
-     * @throws PaymentGatewayException only for the explicit technical-error test token.
+     * @param request solicitud independiente del proveedor creada por el servicio de aplicación.
+     * @return resultado de negocio determinista satisfactorio o rechazado.
+     * @throws PaymentGatewayException solo para el token de prueba explícito de error técnico.
      */
     override fun authorize(request: PaymentGatewayRequest): GatewayAuthorizationResult =
-        // `when` is exhaustive for the intended fake scenarios and contains no random fallback.
+        // `when` es exhaustivo para los escenarios previstos de la simulación y no contiene ninguna alternativa aleatoria.
         when (request.paymentMethodId.value) {
             "pm-test-success" -> GatewayAuthorizationResult.Authorized(
-                // The stable order key makes repeated fake responses identical.
+                // La clave estable del pedido hace que las respuestas simuladas repetidas sean idénticas.
                 PaymentProviderReference("fake-${request.idempotencyKey.value}"),
             )
             "pm-test-rejected" -> GatewayAuthorizationResult.Rejected(

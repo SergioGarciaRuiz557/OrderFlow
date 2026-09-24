@@ -6,31 +6,31 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Strongly typed identity of an {@link Order} aggregate.
+ * Identidad con tipo fuerte de un agregado {@link Order}.
  *
- * @param value non-null UUID stored in the database and exposed by the API
+ * @param value UUID no nulo almacenado en la base de datos y expuesto por la API
  */
 public record OrderId(UUID value) {
-    /** Validates that an Order identity is present. */
+    /** Valida que esté presente una identidad de Order. */
     public OrderId {
         Objects.requireNonNull(value, "Order id is required");
     }
 
     /**
-     * Generates a new random aggregate identity for the production ID provider.
+     * Genera una identidad aleatoria nueva del agregado para el proveedor de identificadores de producción.
      *
-     * @return newly generated identity
+     * @return identidad recién generada
      */
     public static OrderId newId() {
         return new OrderId(UUID.randomUUID());
     }
 
     /**
-     * Parses the textual UUID representation used by external boundaries.
+     * Analiza la representación textual del UUID utilizada por los límites externos.
      *
-     * @param value textual UUID
-     * @return typed Order identity
-     * @throws DomainInvariantViolationException when the text is not a valid UUID
+     * @param value UUID textual
+     * @return identidad de Order con tipo
+     * @throws DomainInvariantViolationException cuando el texto no es un UUID válido
      */
     public static OrderId from(String value) {
         try {
@@ -41,9 +41,9 @@ public record OrderId(UUID value) {
     }
 
     /**
-     * Returns the canonical UUID text without the record wrapper.
+     * Devuelve el texto canónico del UUID sin el envoltorio del record.
      *
-     * @return canonical UUID text
+     * @return texto canónico del UUID
      */
     @Override
     public String toString() {

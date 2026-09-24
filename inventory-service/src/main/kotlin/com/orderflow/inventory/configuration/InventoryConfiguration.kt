@@ -7,22 +7,23 @@ import java.time.Clock
 import java.time.temporal.ChronoUnit
 
 /**
- * Dependency configuration for infrastructure-independent time handling.
+ * Configuración de dependencias para gestionar el tiempo con independencia de la infraestructura.
  *
- * Keeping clock construction here lets the application depend on [ClockProvider] and lets tests
- * substitute deterministic clocks without changing domain behavior.
+ * Mantener aquí la creación del reloj permite que la aplicación dependa de [ClockProvider] y que
+ * las pruebas sustituyan los relojes por otros deterministas sin cambiar el comportamiento del dominio.
  */
 @Configuration
 class InventoryConfiguration {
     /**
-     * Adapts Java's [Clock] to the application's small outbound time port.
+     * Adapta el [Clock] de Java al pequeño puerto de salida temporal de la aplicación.
      *
-     * @param clock configured clock implementation.
-     * PostgreSQL stores timestamps with microsecond precision, while [java.time.Instant] can carry
-     * nanoseconds. Normalizing here ensures the value returned by a use case is identical to the
-     * value reconstructed after a persistence round trip on every operating system.
+     * @param clock implementación configurada del reloj.
+     * PostgreSQL almacena marcas temporales con precisión de microsegundos, mientras que
+     * [java.time.Instant] puede contener nanosegundos. Normalizar aquí garantiza que el valor
+     * devuelto por un caso de uso sea idéntico al reconstruido tras un ciclo completo de
+     * persistencia en cualquier sistema operativo.
      *
-     * @return provider whose `now` operation returns the current instant at microsecond precision.
+     * @return proveedor cuya operación `now` devuelve el instante actual con precisión de microsegundos.
      */
     @Bean
     fun clockProvider(clock: Clock): ClockProvider = ClockProvider {
@@ -30,11 +31,11 @@ class InventoryConfiguration {
     }
 
     /**
-     * Provides the production clock in UTC.
+     * Proporciona el reloj de producción en UTC.
      *
-     * UTC instants avoid server-time-zone ambiguity in persisted reservation timestamps.
+     * Los instantes UTC evitan la ambigüedad de la zona horaria del servidor en las marcas temporales persistidas de las reservas.
      *
-     * @return system clock configured for UTC.
+     * @return reloj del sistema configurado en UTC.
      */
     @Bean
     fun clock(): Clock = Clock.systemUTC()

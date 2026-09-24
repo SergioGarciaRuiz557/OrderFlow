@@ -27,7 +27,7 @@ import java.util.UUID
 class PaymentKafkaIntegrationTest {
     @Autowired lateinit var json: ObjectMapper
 
-    @Test fun `publishes authorized and rejected outcomes with the command metadata and key`() {
+    @Test fun `publica resultados autorizados y rechazados con los metadatos y la clave del comando`() {
         consumer().use { consumer ->
             verifyOutcome(consumer, "pm-test-success", "PaymentAuthorizedEvent")
             verifyOutcome(consumer, "pm-test-rejected", "PaymentRejectedEvent")

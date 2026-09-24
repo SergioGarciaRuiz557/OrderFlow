@@ -17,16 +17,17 @@ import com.orderflow.inventory.domain.model.ReservationResult
 import org.springframework.stereotype.Service
 
 /**
- * Application service coordinating every Inventory use case.
+ * Servicio de aplicación que coordina todos los casos de uso de Inventory.
  *
- * This class is deliberately thin: repositories locate and persist aggregates, [ClockProvider]
- * supplies deterministic timestamps, and [InventoryItem] owns stock arithmetic and business rules.
- * The service additionally provides a bounded retry policy for optimistic concurrency conflicts.
- * Retrying reloads current state and invokes domain behavior again, so the final response reflects
- * the latest stock rather than blindly replaying a stale write.
+ * Esta clase es deliberadamente ligera: los repositorios localizan y persisten agregados,
+ * [ClockProvider] proporciona marcas temporales deterministas e [InventoryItem] es responsable de
+ * la aritmética de existencias y las reglas de negocio. El servicio también ofrece una política de
+ * reintentos acotada para los conflictos de concurrencia optimista. Cada reintento vuelve a cargar
+ * el estado actual e invoca de nuevo el comportamiento del dominio, de modo que la respuesta final
+ * refleja las últimas existencias en lugar de repetir a ciegas una escritura obsoleta.
  *
- * @property inventoryRepository framework-independent access to persisted inventory aggregates.
- * @property clockProvider source of reservation and release timestamps.
+ * @property inventoryRepository acceso independiente del framework a los agregados de inventario persistidos.
+ * @property clockProvider fuente de marcas temporales de reserva y liberación.
  */
 @Service
 class InventoryApplicationService(
@@ -38,14 +39,15 @@ class InventoryApplicationService(
     CreateOrUpdateInventoryUseCase {
 
     /**
-     * Loads inventory, delegates reservation rules to the aggregate, and persists accepted changes.
+     * Carga el inventario, delega las reglas de reserva en el agregado y persiste los cambios aceptados.
      *
-     * A missing product is a business rejection. Exact duplicate active requests return their
-     * existing reservation without writing again. New accepted reservations are saved, while all
-     * rejected results pass through unchanged. The sealed `when` keeps outcome processing exhaustive.
+     * La ausencia de un producto es un rechazo de negocio. Las solicitudes activas duplicadas exactas
+     * devuelven su reserva existente sin volver a escribir. Las nuevas reservas aceptadas se guardan,
+     * mientras que todos los resultados rechazados se devuelven sin cambios. El `when` sellado
+     * mantiene exhaustivo el procesamiento de resultados.
      *
-     * @param command product, order, and quantity to reserve.
-     * @return accepted or rejected domain result based on the latest available aggregate state.
+     * @param command producto, pedido y cantidad que se reservarán.
+     * @return resultado de dominio aceptado o rechazado según el último estado disponible del agregado.
      */
     override fun reserve(command: ReserveInventoryCommand): ReservationResult = retryOnConflict {
         val inventoryItem = inventoryRepository.findByProductId(command.productId)
@@ -60,14 +62,14 @@ class InventoryApplicationService(
             quantity = command.quantity,
             at = clockProvider.now(),
         )) {
-            // Business rejection does not alter state and therefore requires no persistence call.
+            // Un rechazo de negocio no modifica el estado y, por tanto, no requiere una llamada de persistencia.
             is ReservationResult.Rejected -> result
             is ReservationResult.Reserved -> {
                 if (result.wasAlreadyReserved) {
-                    // An exact duplicate has already been persisted; returning it is the idempotent path.
+                    // Un duplicado exacto ya se ha persistido; devolverlo es la ruta idempotente.
                     result
                 } else {
-                    // Saving the whole aggregate atomically persists stock and reservation history.
+                    // Guardar el agregado completo persiste atómicamente las existencias y el historial de reservas.
                     val saved = inventoryRepository.save(result.inventoryItem)
                     result.copy(inventoryItem = saved)
                 }
@@ -76,20 +78,20 @@ class InventoryApplicationService(
     }
 
     /**
-     * Locates and releases a reservation, persisting stock restoration only on its first release.
+     * Localiza y libera una reserva, y persiste la reposición de existencias solo en su primera liberación.
      *
-     * Both unknown and already released reservations remain visible to the caller. Only a genuine
-     * [ReleaseResult.Released] transition produces a database write.
+     * Tanto las reservas desconocidas como las ya liberadas siguen siendo visibles para el consumidor.
+     * Solo una transición [ReleaseResult.Released] real produce una escritura en la base de datos.
      *
-     * @param reservationId reservation requested for compensation.
-     * @return exhaustive release outcome evaluated against current persisted state.
+     * @param reservationId reserva cuya compensación se solicita.
+     * @return resultado exhaustivo de la liberación evaluado respecto al estado persistido actual.
      */
     override fun release(reservationId: ReservationId): ReleaseResult = retryOnConflict {
         val inventoryItem = inventoryRepository.findByReservationId(reservationId)
             ?: return@retryOnConflict ReleaseResult.ReservationNotFound(reservationId)
 
         when (val result = inventoryItem.release(reservationId, clockProvider.now())) {
-            // These two outcomes are state preserving, so neither should increment the JPA version.
+            // Estos dos resultados conservan el estado, por lo que ninguno debe incrementar la versión JPA.
             is ReleaseResult.ReservationNotFound -> result
             is ReleaseResult.AlreadyReleased -> result
             is ReleaseResult.Released -> {
@@ -100,24 +102,25 @@ class InventoryApplicationService(
     }
 
     /**
-     * Returns the current aggregate snapshot for administrative inspection.
+     * Devuelve la instantánea actual del agregado para su consulta administrativa.
      *
-     * @param productId product being queried.
-     * @return persisted inventory or `null` if it does not exist.
+     * @param productId producto consultado.
+     * @return inventario persistido, o `null` si no existe.
      */
     override fun get(productId: ProductId): InventoryItem? = inventoryRepository.findByProductId(productId)
 
     /**
-     * Creates inventory or replaces its currently available stock.
+     * Crea el inventario o sustituye sus existencias disponibles actuales.
      *
-     * Validation occurs before repository access so invalid negative values fail fast. Existing
-     * aggregates preserve their reservations; absent products begin with empty reservation history.
-     * Concurrency conflicts cause the current aggregate to be reloaded before applying the quantity.
+     * La validación se realiza antes de acceder al repositorio para que los valores negativos no
+     * válidos fallen de inmediato. Los agregados existentes conservan sus reservas; los productos
+     * ausentes comienzan con un historial de reservas vacío. Los conflictos de concurrencia hacen
+     * que el agregado actual vuelva a cargarse antes de aplicar la cantidad.
      *
-     * @param productId product being initialized or adjusted.
-     * @param quantity new available quantity; zero is valid.
-     * @return saved aggregate with its current persistence version.
-     * @throws IllegalArgumentException when [quantity] is negative.
+     * @param productId producto que se inicializa o ajusta.
+     * @param quantity nueva cantidad disponible; cero es válido.
+     * @return agregado guardado con su versión actual de persistencia.
+     * @throws IllegalArgumentException cuando [quantity] es negativo.
      */
     override fun setAvailableQuantity(productId: ProductId, quantity: Int): InventoryItem {
         require(quantity >= 0) { "Available stock cannot be negative" }
@@ -130,32 +133,33 @@ class InventoryApplicationService(
     }
 
     /**
-     * Executes [operation] with a small bounded optimistic-concurrency retry policy.
+     * Ejecuta [operation] con una pequeña política acotada de reintentos por concurrencia optimista.
      *
-     * Each retry reruns the complete lambda, including repository reads and domain evaluation. This
-     * is essential for correctness: after another reservation consumes the last unit, a retry must
-     * observe that state and return insufficient stock instead of forcing the stale allocation.
-     * The final attempt is allowed to propagate its exception, preventing an unbounded loop during
-     * sustained contention or an incorrectly classified infrastructure failure.
+     * Cada reintento vuelve a ejecutar la lambda completa, incluidas las lecturas del repositorio y
+     * la evaluación del dominio. Esto es esencial para la corrección: después de que otra reserva
+     * consuma la última unidad, un reintento debe observar ese estado y devolver existencias
+     * insuficientes en vez de forzar la asignación obsoleta. Se permite que el último intento propague
+     * su excepción, lo que evita un bucle ilimitado durante una contención sostenida o ante un fallo
+     * de infraestructura clasificado incorrectamente.
      *
-     * @param operation complete read/evaluate/write unit to retry.
-     * @return the first successful operation result.
-     * @throws ConcurrentInventoryModificationException if every attempt conflicts.
+     * @param operation unidad completa de lectura, evaluación y escritura que se reintentará.
+     * @return el primer resultado satisfactorio de la operación.
+     * @throws ConcurrentInventoryModificationException si todos los intentos entran en conflicto.
      */
     private fun <T> retryOnConflict(operation: () -> T): T {
         repeat(MAX_CONCURRENCY_ATTEMPTS - 1) {
             try {
                 return operation()
             } catch (_: ConcurrentInventoryModificationException) {
-                // Reload the aggregate and re-evaluate its invariants.
+                // Vuelve a cargar el agregado y a evaluar sus invariantes.
             }
         }
         return operation()
     }
 
-    /** Internal concurrency policy constants. */
+    /** Constantes de la política interna de concurrencia. */
     private companion object {
-        /** Maximum number of complete attempts before the final conflict is propagated. */
+        /** Número máximo de intentos completos antes de propagar el conflicto final. */
         const val MAX_CONCURRENCY_ATTEMPTS = 3
     }
 }

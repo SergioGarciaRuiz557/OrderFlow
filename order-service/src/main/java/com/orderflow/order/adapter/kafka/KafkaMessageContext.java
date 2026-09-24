@@ -1,7 +1,7 @@
 package com.orderflow.order.adapter.kafka;
 
 import java.util.UUID;
-/** Adapter-local metadata scope used while a Kafka callback synchronously produces follow-up messages. */
+/** Ámbito de metadatos local del adaptador utilizado mientras una notificación de Kafka produce mensajes posteriores de forma síncrona. */
 public final class KafkaMessageContext {
     private static final ThreadLocal<Metadata> CURRENT = new ThreadLocal<>();
 

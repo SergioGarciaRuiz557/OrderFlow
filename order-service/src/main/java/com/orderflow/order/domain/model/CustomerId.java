@@ -4,12 +4,12 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Strongly typed reference to the customer who owns an order.
+ * Referencia con tipo fuerte al cliente propietario de un pedido.
  *
- * @param value non-null external customer UUID
+ * @param value UUID externo no nulo del cliente
  */
 public record CustomerId(UUID value) {
-    /** Validates that the customer reference is present. */
+    /** Valida que esté presente la referencia del cliente. */
     public CustomerId {
         Objects.requireNonNull(value, "Customer id is required");
     }

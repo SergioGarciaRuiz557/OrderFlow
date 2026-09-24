@@ -27,40 +27,42 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * End-to-end persistence tests against a real disposable PostgreSQL database.
+ * Pruebas de persistencia de extremo a extremo contra una base de datos PostgreSQL real y desechable.
  *
- * The suite starts the complete Spring context, applies production Flyway migrations, and exercises
- * the repository through application/domain ports rather than relying on an in-memory database with
- * different locking semantics. Tests are skipped when Docker is unavailable so ordinary unit tests
- * remain runnable, but CI environments with Docker execute every persistence scenario.
+ * La suite inicia el contexto completo de Spring, aplica las migraciones de producción de Flyway y
+ * ejercita el repositorio mediante puertos de aplicación y dominio, en vez de depender de una base
+ * de datos en memoria con una semántica de bloqueo diferente. Las pruebas se omiten cuando Docker no
+ * está disponible para que las pruebas unitarias ordinarias puedan ejecutarse, pero los entornos de
+ * integración continua con Docker ejecutan todos los escenarios de persistencia.
  */
 @SpringBootTest(properties = ["orderflow.kafka.enabled=false"])
 @Testcontainers(disabledWithoutDocker = true)
 class InventoryPersistenceIntegrationTest {
-    /** Domain-facing repository used to verify persistence round trips and stale writes. */
+    /** Repositorio orientado al dominio para verificar ciclos de persistencia y escrituras obsoletas. */
     @Autowired
     private lateinit var repository: InventoryRepository
 
-    /** Reservation input port exercised with the production application service and JPA adapter. */
+    /** Puerto de entrada de reservas ejercitado con el servicio de aplicación y adaptador JPA de producción. */
     @Autowired
     private lateinit var reserveInventory: ReserveInventoryUseCase
 
-    /** Administrative input port used to prepare isolated product stock for each test. */
+    /** Puerto de entrada administrativo para preparar existencias aisladas de producto en cada prueba. */
     @Autowired
     private lateinit var createOrUpdateInventory: CreateOrUpdateInventoryUseCase
 
-    /** Flyway runtime metadata used to prove production migrations were applied by the test context. */
+    /** Metadatos de ejecución de Flyway para demostrar que el contexto aplicó las migraciones de producción. */
     @Autowired
     private lateinit var flyway: Flyway
 
     /**
-     * Verifies that Flyway creates a schema capable of inserting and loading versioned inventory.
+     * Verifica que Flyway cree un esquema capaz de insertar y cargar inventario versionado.
      *
-     * A successful round trip proves that Spring Data mappings agree with the migration column names
-     * and that the database assigns an optimistic-lock version to a newly inserted aggregate.
+     * Un ciclo correcto demuestra que los mapeos de Spring Data concuerdan con los nombres de columna
+     * de la migración y que la base de datos asigna una versión de bloqueo optimista a un agregado
+     * recién insertado.
      */
     @Test
-    fun `Flyway migration creates a usable inventory aggregate`() {
+    fun `la migración de Flyway crea un agregado de inventario utilizable`() {
         val productId = ProductId("migration-product")
 
         val saved = createOrUpdateInventory.setAvailableQuantity(productId, 12)
@@ -72,13 +74,13 @@ class InventoryPersistenceIntegrationTest {
     }
 
     /**
-     * Verifies that stock and its reservation entity persist as one complete aggregate graph.
+     * Verifica que las existencias y su entidad de reserva persistan como un grafo de agregado completo.
      *
-     * The test also exercises lookup by reservation identifier and confirms that this lookup returns
-     * the whole owner rather than a partially initialized reservation collection.
+     * La prueba también ejercita la búsqueda por identificador de reserva y confirma que devuelve el
+     * propietario completo, en lugar de una colección de reservas inicializada parcialmente.
      */
     @Test
-    fun `repository persists reservation state round trip`() {
+    fun `el repositorio conserva el estado de la reserva durante un ciclo completo`() {
         val productId = ProductId("round-trip-product")
         createOrUpdateInventory.setAvailableQuantity(productId, 8)
 
@@ -93,14 +95,14 @@ class InventoryPersistenceIntegrationTest {
     }
 
     /**
-     * Proves that two snapshots with the same version cannot both overwrite inventory state.
+     * Demuestra que dos instantáneas con la misma versión no pueden sobrescribir ambas el inventario.
      *
-     * Saving the first copy increments the database version. Saving the stale copy must be translated
-     * from Hibernate's exception into [ConcurrentInventoryModificationException], and the winning
-     * quantity must remain stored.
+     * Guardar la primera copia incrementa la versión de la base de datos. La excepción de Hibernate
+     * al guardar la copia obsoleta debe traducirse a [ConcurrentInventoryModificationException] y la
+     * cantidad ganadora debe permanecer almacenada.
      */
     @Test
-    fun `stale aggregate update fails with optimistic locking`() {
+    fun `actualizar un agregado obsoleto falla por el bloqueo optimista`() {
         val productId = ProductId("locking-product")
         createOrUpdateInventory.setAvailableQuantity(productId, 5)
         val firstCopy = requireNotNull(repository.findByProductId(productId))
@@ -115,15 +117,15 @@ class InventoryPersistenceIntegrationTest {
     }
 
     /**
-     * Exercises the real concurrency path when two orders compete for the final available unit.
+     * Ejercita la ruta real de concurrencia cuando dos pedidos compiten por la última unidad disponible.
      *
-     * Latches align both worker threads at the start. Regardless of which transaction wins, the
-     * expected outcome is exactly one reservation, one business rejection, and zero remaining stock.
-     * This verifies that retrying optimistic conflicts re-evaluates current domain state and prevents
-     * overselling.
+     * Los latches sincronizan ambos hilos de trabajo al inicio. Con independencia de qué transacción
+     * gane, el resultado esperado es exactamente una reserva, un rechazo de negocio y cero existencias
+     * restantes. Esto verifica que reintentar los conflictos optimistas vuelve a evaluar el estado
+     * actual del dominio y evita vender por encima de las existencias.
      */
     @Test
-    fun `concurrent reservations cannot oversell final unit`() {
+    fun `las reservas concurrentes no pueden sobrevender la última unidad`() {
         val productId = ProductId("concurrent-product")
         createOrUpdateInventory.setAvailableQuantity(productId, 1)
         val ready = CountDownLatch(2)
@@ -131,7 +133,7 @@ class InventoryPersistenceIntegrationTest {
         val executor = Executors.newFixedThreadPool(2)
 
         try {
-            // Each task represents an independent order entering the service concurrently.
+            // Cada tarea representa un pedido independiente que entra simultáneamente en el servicio.
             val futures = (1..2).map { orderNumber ->
                 executor.submit<ReservationResult> {
                     ready.countDown()
@@ -145,7 +147,7 @@ class InventoryPersistenceIntegrationTest {
                     )
                 }
             }
-            // Wait until both workers are ready before releasing the shared start gate.
+            // Espera a que ambos trabajadores estén listos antes de abrir la barrera de inicio compartida.
             assertTrue(ready.await(10, TimeUnit.SECONDS))
             start.countDown()
             val results = futures.map { it.get(20, TimeUnit.SECONDS) }
@@ -154,22 +156,22 @@ class InventoryPersistenceIntegrationTest {
             assertEquals(1, results.count { it is ReservationResult.Rejected })
             assertEquals(0, repository.findByProductId(productId)?.availableQuantity)
         } finally {
-            // Always release executor resources, including when an assertion or future fails.
+            // Libera siempre los recursos del ejecutor, incluso si falla una aserción o un future.
             executor.shutdownNow()
         }
     }
 
-    /** Static Testcontainers and Spring dynamic-property integration. */
+    /** Integración estática de Testcontainers y propiedades dinámicas de Spring. */
     companion object {
-        /** PostgreSQL version used to execute the production schema and locking behavior. */
+        /** Versión de PostgreSQL utilizada para ejecutar el esquema y los bloqueos de producción. */
         @Container
         @JvmStatic
         val postgres = PostgreSQLContainer<Nothing>("postgres:16-alpine")
 
         /**
-         * Replaces local datasource settings with the container's runtime connection details.
+         * Sustituye la configuración local del datasource por los datos de conexión del contenedor.
          *
-         * @param registry Spring property registry populated before the application context starts.
+         * @param registry registro de propiedades de Spring rellenado antes de iniciar el contexto.
          */
         @DynamicPropertySource
         @JvmStatic

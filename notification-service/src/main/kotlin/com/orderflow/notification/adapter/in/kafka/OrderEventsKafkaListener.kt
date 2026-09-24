@@ -37,8 +37,9 @@ class OrderEventsKafkaListener(
         require(orderId == aggregateId) { "aggregateId must equal payload.orderId" }
         require(orderId == correlationId) { "correlationId must equal payload.orderId" }
         val customerId = payload.uuid("customerId")
-        // Customer contact lookup is outside this commit; this deterministic non-routable address
-        // adapts the current UUID-only Order contract to Notification's existing recipient port.
+        // La búsqueda de contacto del cliente queda fuera de este cambio; esta dirección determinista
+        // no enrutable adapta el contrato actual de Pedidos, basado solo en UUID, al puerto de
+        // destinatario existente en Notificaciones.
         val recipient = Recipient("$customerId@orderflow.invalid")
         logger.info("Kafka message received: messageType={}, messageId={}, correlationId={}, orderId={}", type, messageId, correlationId, orderId)
         when (type) {

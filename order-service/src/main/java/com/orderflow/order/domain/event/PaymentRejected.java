@@ -5,11 +5,11 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Fact that Payment rejected authorization and compensation must begin.
+ * Hecho que indica que Payment ha rechazado la autorización y debe comenzar la compensación.
  *
- * @param orderId rejected aggregate
- * @param reason normalized business explanation
- * @param occurredAt callback processing time
+ * @param orderId agregado rechazado
+ * @param reason explicación de negocio normalizada
+ * @param occurredAt instante de procesamiento de la notificación
  */
 public record PaymentRejected(OrderId orderId, String reason, Instant occurredAt) implements OrderDomainEvent {
 }

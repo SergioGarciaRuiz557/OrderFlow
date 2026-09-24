@@ -3,32 +3,32 @@ package com.orderflow.inventory.domain.model
 import java.time.Instant
 
 /**
- * Lifecycle state of a stock reservation.
+ * Estado del ciclo de vida de una reserva de existencias.
  *
- * The deliberately small state machine supports allocation and compensation without allowing a
- * released reservation to become active again.
+ * Esta máquina de estados deliberadamente pequeña permite la asignación y la compensación sin que
+ * una reserva liberada pueda volver a estar activa.
  */
 enum class ReservationStatus {
-    /** Stock is currently allocated to the associated order. */
+    /** Las existencias están asignadas actualmente al pedido asociado. */
     ACTIVE,
 
-    /** Allocated stock has been returned to availability and cannot be returned a second time. */
+    /** Las existencias asignadas han vuelto a estar disponibles y no pueden devolverse por segunda vez. */
     RELEASED,
 }
 
 /**
- * Domain entity recording a traceable allocation of stock to one order.
+ * Entidad de dominio que registra una asignación trazable de existencias a un pedido.
  *
- * A reservation belongs to an [InventoryItem] aggregate and is never persisted or changed on its
- * own. The timestamps and status preserve the history needed to distinguish an active allocation
- * from a compensation that has already been applied.
+ * Una reserva pertenece a un agregado [InventoryItem] y nunca se persiste ni modifica de forma
+ * independiente. Las marcas temporales y el estado conservan el historial necesario para distinguir
+ * una asignación activa de una compensación que ya se ha aplicado.
  *
- * @property id stable identifier used by release commands and persistence.
- * @property orderId order for which the units were allocated.
- * @property quantity positive number of allocated units.
- * @property status current lifecycle state.
- * @property reservedAt time at which the allocation was accepted.
- * @property releasedAt time at which the allocation was returned, or `null` while active.
+ * @property id identificador estable utilizado por los comandos de liberación y la persistencia.
+ * @property orderId pedido al que se asignaron las unidades.
+ * @property quantity número positivo de unidades asignadas.
+ * @property status estado actual del ciclo de vida.
+ * @property reservedAt instante en el que se aceptó la asignación.
+ * @property releasedAt instante en el que se devolvió la asignación, o `null` mientras esté activa.
  */
 data class StockReservation(
     val id: ReservationId,
@@ -39,10 +39,11 @@ data class StockReservation(
     val releasedAt: Instant?,
 ) {
     /**
-     * Ensures lifecycle state and temporal data cannot contradict each other.
+     * Garantiza que el estado del ciclo de vida y los datos temporales no se contradigan.
      *
-     * Active reservations must not have a release timestamp, while released reservations must have
-     * one. The condition is evaluated for both newly created and reconstituted instances.
+     * Las reservas activas no deben tener una marca temporal de liberación, mientras que las reservas
+     * liberadas deben tenerla. La condición se evalúa tanto para las instancias recién creadas como
+     * para las reconstituidas.
      */
     init {
         require((status == ReservationStatus.ACTIVE) == (releasedAt == null)) {
@@ -51,32 +52,32 @@ data class StockReservation(
     }
 
     /**
-     * Transitions this reservation to [ReservationStatus.RELEASED].
+     * Cambia esta reserva a [ReservationStatus.RELEASED].
      *
-     * The operation is idempotent. Releasing an already released reservation returns the same
-     * instance, retaining the original release timestamp and preventing callers from representing a
-     * second stock restoration.
+     * La operación es idempotente. Liberar una reserva ya liberada devuelve la misma instancia,
+     * conserva la marca temporal de liberación original y evita que los consumidores representen
+     * una segunda reposición de existencias.
      *
-     * @param at authoritative time at which the first release occurs.
-     * @return a released copy for an active reservation, or this instance when already released.
+     * @param at instante de referencia en el que se produce la primera liberación.
+     * @return una copia liberada de una reserva activa, o esta instancia si ya estaba liberada.
      */
     fun release(at: Instant): StockReservation = when (status) {
         ReservationStatus.ACTIVE -> copy(status = ReservationStatus.RELEASED, releasedAt = at)
         ReservationStatus.RELEASED -> this
     }
 
-    /** Factory operations that create valid reservation lifecycle states. */
+    /** Operaciones de factoría que crean estados válidos del ciclo de vida de una reserva. */
     companion object {
         /**
-         * Creates a newly accepted active reservation.
+         * Crea una reserva activa recién aceptada.
          *
-         * The release timestamp is deliberately absent because no compensation has occurred yet.
+         * La marca temporal de liberación se omite deliberadamente porque aún no se ha producido ninguna compensación.
          *
-         * @param id identifier generated by the application layer for this reservation attempt.
-         * @param orderId order receiving the allocation.
-         * @param quantity units allocated to the order.
-         * @param reservedAt authoritative acceptance time.
-         * @return a valid active reservation.
+         * @param id identificador generado por la capa de aplicación para este intento de reserva.
+         * @param orderId pedido que recibe la asignación.
+         * @param quantity unidades asignadas al pedido.
+         * @param reservedAt instante de referencia de la aceptación.
+         * @return una reserva activa válida.
          */
         fun active(
             id: ReservationId,

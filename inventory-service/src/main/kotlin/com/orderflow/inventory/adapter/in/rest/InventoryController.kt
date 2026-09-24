@@ -18,15 +18,15 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Inbound HTTP adapter for inventory administration and inspection.
+ * Adaptador HTTP de entrada para administrar y consultar el inventario.
  *
- * REST is intentionally limited to preparing available stock and reading current state. Order-driven
- * reservation and release flows enter through application ports and can later be connected to Kafka
- * without changing this controller or the domain. Transport strings and JSON DTOs are converted at
- * this boundary into domain types such as [ProductId].
+ * REST se limita deliberadamente a preparar las existencias disponibles y leer el estado actual.
+ * Los flujos de reserva y liberación impulsados por pedidos entran por los puertos de aplicación y
+ * pueden conectarse más adelante a Kafka sin cambiar este controlador ni el dominio. En esta frontera,
+ * las cadenas de transporte y los DTO JSON se convierten en tipos de dominio como [ProductId].
  *
- * @property createOrUpdateInventory use case used by the administrative `PUT` endpoint.
- * @property getInventory query use case used by the `GET` endpoint.
+ * @property createOrUpdateInventory caso de uso empleado por el endpoint administrativo `PUT`.
+ * @property getInventory caso de uso de consulta empleado por el endpoint `GET`.
  */
 @RestController
 @RequestMapping("/api/inventory")
@@ -35,14 +35,15 @@ class InventoryController(
     private val getInventory: GetInventoryUseCase,
 ) {
     /**
-     * Creates inventory or replaces the quantity currently available for reservations.
+     * Crea el inventario o sustituye la cantidad disponible actualmente para reservas.
      *
-     * Bean Validation rejects negative request quantities before the use case runs. A successful
-     * operation returns the complete current representation, including reservation history.
+     * Bean Validation rechaza las cantidades negativas de la solicitud antes de ejecutar el caso de
+     * uso. Una operación satisfactoria devuelve la representación actual completa, incluido el
+     * historial de reservas.
      *
-     * @param productId product identifier taken from the URL path.
-     * @param request validated JSON body containing the new available quantity.
-     * @return representation of the persisted inventory aggregate.
+     * @param productId identificador del producto obtenido de la ruta URL.
+     * @param request cuerpo JSON validado que contiene la nueva cantidad disponible.
+     * @return representación del agregado de inventario persistido.
      */
     @PutMapping("/{productId}")
     fun setAvailableQuantity(
@@ -53,11 +54,11 @@ class InventoryController(
         .toResponse()
 
     /**
-     * Retrieves stock and reservation history for one product.
+     * Recupera las existencias y el historial de reservas de un producto.
      *
-     * @param productId product identifier taken from the URL path.
-     * @return HTTP representation of the matching aggregate.
-     * @throws ResponseStatusException with HTTP 404 when inventory has not been prepared.
+     * @param productId identificador del producto obtenido de la ruta URL.
+     * @return representación HTTP del agregado correspondiente.
+     * @throws ResponseStatusException con HTTP 404 cuando no se ha preparado el inventario.
      */
     @GetMapping("/{productId}")
     fun get(@PathVariable productId: String): InventoryResponse = getInventory
@@ -67,10 +68,10 @@ class InventoryController(
 }
 
 /**
- * Request body for the administrative stock-setting operation.
+ * Cuerpo de la solicitud para la operación administrativa de ajuste de existencias.
  *
- * @property quantity exact number of units that should be available after the update; zero is valid
- * and negative values are rejected by [Min].
+ * @property quantity número exacto de unidades que deben estar disponibles tras la actualización;
+ * cero es válido y [Min] rechaza los valores negativos.
  */
 data class SetInventoryRequest(
     @field:Min(0)
@@ -78,13 +79,13 @@ data class SetInventoryRequest(
 )
 
 /**
- * External inventory representation returned by the REST adapter.
+ * Representación externa del inventario devuelta por el adaptador REST.
  *
- * The DTO prevents the domain aggregate from becoming part of the public JSON contract.
+ * El DTO evita que el agregado de dominio pase a formar parte del contrato JSON público.
  *
- * @property productId external product identifier.
- * @property availableQuantity units available for new reservations.
- * @property reservations complete traceable reservation history.
+ * @property productId identificador externo del producto.
+ * @property availableQuantity unidades disponibles para nuevas reservas.
+ * @property reservations historial completo y trazable de reservas.
  */
 data class InventoryResponse(
     val productId: String,
@@ -93,14 +94,14 @@ data class InventoryResponse(
 )
 
 /**
- * REST representation of one reservation owned by an inventory item.
+ * Representación REST de una reserva perteneciente a un elemento de inventario.
  *
- * @property reservationId stable identifier used for future release commands.
- * @property orderId order that requested the allocation.
- * @property quantity number of allocated units.
- * @property status domain lifecycle state serialized by name.
- * @property reservedAt instant at which allocation was accepted.
- * @property releasedAt instant at which stock was restored, or `null` while active.
+ * @property reservationId identificador estable utilizado por futuros comandos de liberación.
+ * @property orderId pedido que solicitó la asignación.
+ * @property quantity número de unidades asignadas.
+ * @property status estado del ciclo de vida del dominio serializado por su nombre.
+ * @property reservedAt instante en el que se aceptó la asignación.
+ * @property releasedAt instante en el que se repusieron las existencias, o `null` mientras esté activa.
  */
 data class ReservationResponse(
     val reservationId: UUID,
@@ -112,13 +113,13 @@ data class ReservationResponse(
 )
 
 /**
- * Maps a domain aggregate to the HTTP response model.
+ * Mapea un agregado de dominio al modelo de respuesta HTTP.
  *
- * Keeping the mapper private to this adapter prevents transport concerns from leaking into the
- * domain and makes every externally exposed field an explicit decision.
+ * Mantener el mapeador privado en este adaptador evita que los aspectos de transporte se filtren al
+ * dominio y convierte cada campo expuesto externamente en una decisión explícita.
  *
- * @receiver inventory aggregate to serialize.
- * @return detached REST representation of the aggregate and its reservations.
+ * @receiver agregado de inventario que se serializará.
+ * @return representación REST independiente del agregado y sus reservas.
  */
 private fun InventoryItem.toResponse(): InventoryResponse = InventoryResponse(
     productId = productId.value,

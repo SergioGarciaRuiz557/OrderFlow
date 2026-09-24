@@ -10,49 +10,50 @@ import com.orderflow.payment.domain.model.PaymentProviderReference
 import java.time.Instant
 
 /**
- * Framework-independent persistence port for complete [Payment] aggregates.
+ * Puerto de persistencia independiente del framework para agregados [Payment] completos.
  *
- * Application code depends only on this contract. The Spring Data repository and mutable JPA entity
- * remain private details of the persistence adapter, preserving the hexagonal dependency direction.
+ * El código de la aplicación solo depende de este contrato. El repositorio de Spring Data y la entidad
+ * JPA mutable siguen siendo detalles privados del adaptador de persistencia, lo que conserva la
+ * dirección de dependencias hexagonal.
  */
 interface PaymentRepository {
     /**
-     * Retrieves an aggregate by its technical identity.
+     * Recupera un agregado por su identidad técnica.
      *
-     * @return stored payment or `null` when it does not exist.
+     * @return pago almacenado o `null` cuando no existe.
      */
     fun findById(paymentId: PaymentId): Payment?
 
     /**
-     * Retrieves the unique payment operation associated with an order.
+     * Recupera la operación de pago única asociada con un pedido.
      *
-     * This lookup is the first application-level idempotency check before any gateway invocation.
+     * Esta búsqueda es la primera comprobación de idempotencia en el nivel de aplicación antes de invocar la pasarela.
      *
-     * @return stored payment for the order, or `null` when authorization has never been requested.
+     * @return pago almacenado del pedido, o `null` cuando nunca se ha solicitado la autorización.
      */
     fun findByOrderId(orderId: OrderId): Payment?
 
     /**
-     * Inserts or updates the complete aggregate snapshot.
+     * Inserta o actualiza la instantánea completa del agregado.
      *
-     * @param payment validated domain state to persist.
-     * @return persisted snapshot including the current optimistic-lock version.
-     * @throws DuplicatePaymentException when a database uniqueness rule is violated.
+     * @param payment estado validado del dominio que se debe conservar.
+     * @return instantánea conservada, incluida la versión actual de bloqueo optimista.
+     * @throws DuplicatePaymentException cuando se infringe una regla de unicidad de la base de datos.
      */
     fun save(payment: Payment): Payment
 }
 
 /**
- * Provider-neutral authorization request sent through [PaymentGateway].
+ * Solicitud de autorización independiente del proveedor enviada a través de [PaymentGateway].
  *
- * The gateway idempotency key intentionally uses [OrderId]. It remains stable across service retries
- * and even across a local transaction rollback, preventing a provider that honors idempotency keys
- * from creating a second charge after an uncertain response.
+ * La clave de idempotencia de la pasarela usa intencionadamente [OrderId]. Permanece estable entre
+ * reintentos del servicio e incluso al revertir una transacción local, lo que impide que un proveedor
+ * que respete las claves de idempotencia cree un segundo cargo tras una respuesta incierta.
  *
- * @property idempotencyKey stable business-operation key required by gateway implementations.
- * @property orderId order being paid, included separately as business request context.
- * @property amount amount and currency to authorize.
- * @property paymentMethodId opaque provider payment-method token.
+ * @property idempotencyKey clave estable de la operación de negocio requerida por las implementaciones de la pasarela.
+ * @property orderId pedido que se está pagando, incluido por separado como contexto de la solicitud de negocio.
+ * @property amount importe y moneda que se deben autorizar.
+ * @property paymentMethodId token opaco del método de pago del proveedor.
  */
 data class PaymentGatewayRequest(
     val idempotencyKey: OrderId,
@@ -62,92 +63,94 @@ data class PaymentGatewayRequest(
 )
 
 /**
- * Exhaustive set of definitive business decisions that a gateway may return.
+ * Conjunto exhaustivo de decisiones de negocio definitivas que puede devolver una pasarela.
  *
- * Technical inability to obtain a decision is deliberately absent and must be represented by
- * [PaymentGatewayException]. This separation controls future retry versus rejection-event behavior.
+ * La incapacidad técnica de obtener una decisión se omite deliberadamente y debe representarse con
+ * [PaymentGatewayException]. Esta separación controla el comportamiento futuro entre reintentar y
+ * emitir un evento de rechazo.
  */
 sealed interface GatewayAuthorizationResult {
     /**
-     * Provider approval.
+     * Aprobación del proveedor.
      *
-     * @property providerReference traceable reference that must be stored with the aggregate.
+     * @property providerReference referencia rastreable que se debe almacenar con el agregado.
      */
     data class Authorized(val providerReference: PaymentProviderReference) : GatewayAuthorizationResult
 
     /**
-     * Known provider business rejection.
+     * Rechazo de negocio conocido del proveedor.
      *
-     * @property reason machine-readable reason that will become aggregate state.
+     * @property reason motivo legible por máquina que pasará a formar parte del estado del agregado.
      */
     data class Rejected(val reason: PaymentFailureReason) : GatewayAuthorizationResult
 }
 
 /**
- * Output port that isolates payment orchestration from a concrete external provider.
+ * Puerto de salida que aísla la coordinación del pago de un proveedor externo concreto.
  *
- * Real adapters must forward [PaymentGatewayRequest.idempotencyKey] using their provider's native
- * idempotency mechanism. They must map known declines to [GatewayAuthorizationResult.Rejected] and
- * throw [PaymentGatewayException] when the decision is unknown because of infrastructure failure.
+ * Los adaptadores reales deben reenviar [PaymentGatewayRequest.idempotencyKey] mediante el mecanismo
+ * de idempotencia nativo de su proveedor. Deben asignar los rechazos conocidos a
+ * [GatewayAuthorizationResult.Rejected] y lanzar [PaymentGatewayException] cuando la decisión sea
+ * desconocida a causa de un fallo de infraestructura.
  */
 fun interface PaymentGateway {
     /**
-     * Requests authorization without exposing provider SDK types to application or domain code.
+     * Solicita la autorización sin exponer tipos del SDK del proveedor al código de aplicación o de dominio.
      *
-     * @param request validated, provider-neutral authorization data.
-     * @return definitive authorization or business rejection.
-     * @throws PaymentGatewayException for timeouts, unavailable providers, malformed responses, or
-     * other technical conditions where no trustworthy business outcome exists.
+     * @param request datos de autorización validados e independientes del proveedor.
+     * @return autorización o rechazo de negocio definitivos.
+     * @throws PaymentGatewayException ante tiempos de espera agotados, proveedores no disponibles,
+     * respuestas mal formadas u otras condiciones técnicas sin un resultado de negocio fiable.
      */
     @Throws(PaymentGatewayException::class)
     fun authorize(request: PaymentGatewayRequest): GatewayAuthorizationResult
 }
 
 /**
- * Technical boundary for failures while communicating with a payment provider.
+ * Límite técnico para los fallos de comunicación con un proveedor de pagos.
  *
- * Unlike [GatewayAuthorizationResult.Rejected], this exception does not change aggregate state to
- * `REJECTED`. The application ensures a pending record is committed, then propagates the exception
- * so a future message consumer can retry with the same idempotency key.
+ * A diferencia de [GatewayAuthorizationResult.Rejected], esta excepción no cambia el estado del
+ * agregado a `REJECTED`. La aplicación garantiza que se confirme un registro pendiente y después
+ * propaga la excepción para que un futuro consumidor de mensajes pueda reintentarlo con la misma
+ * clave de idempotencia.
  *
- * @param message diagnostic summary safe for application logs.
- * @param cause underlying provider SDK or transport exception, when available.
+ * @param message resumen de diagnóstico seguro para los registros de la aplicación.
+ * @param cause excepción subyacente del SDK del proveedor o del transporte, cuando esté disponible.
  */
 class PaymentGatewayException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 /**
- * Small output port for obtaining authoritative timestamps without coupling application tests to
- * the system clock.
+ * Pequeño puerto de salida para obtener marcas de tiempo autoritativas sin acoplar las pruebas de la aplicación al reloj del sistema.
  */
 fun interface ClockProvider {
-    /** @return current UTC instant normalized to the precision used by PostgreSQL. */
+    /** @return instante UTC actual normalizado con la precisión que usa PostgreSQL. */
     fun now(): Instant
 }
 
 /**
- * Cross-instance mutual-exclusion boundary for one order's authorization workflow.
+ * Límite de exclusión mutua entre instancias para el flujo de autorización de un pedido.
  *
- * The whole read/create/gateway/write sequence executes inside [operation]. Serializing equal
- * [OrderId] values prevents concurrent requests from both passing the initial absence check and
- * calling the provider. Different orders may execute concurrently.
+ * Toda la secuencia de lectura, creación, pasarela y escritura se ejecuta dentro de [operation].
+ * Serializar valores [OrderId] iguales impide que dos solicitudes concurrentes superen la comprobación
+ * inicial de ausencia y llamen al proveedor. Los pedidos diferentes pueden ejecutarse simultáneamente.
  */
 interface PaymentAuthorizationLock {
     /**
-     * Executes [operation] while holding the lock associated with [orderId].
+     * Ejecuta [operation] mientras mantiene el bloqueo asociado a [orderId].
      *
-     * @param orderId lock key and payment business idempotency key.
-     * @param operation non-null-producing authorization workflow protected by the lock.
-     * @return result produced by [operation].
+     * @param orderId clave de bloqueo y clave de idempotencia de negocio del pago.
+     * @param operation flujo de autorización protegido por el bloqueo que produce un valor no nulo.
+     * @return resultado producido por [operation].
      */
     fun <T : Any> withLock(orderId: OrderId, operation: () -> T): T
 }
 
 /**
- * Application-facing translation of a PostgreSQL uniqueness violation while saving a payment.
+ * Traducción dirigida a la aplicación de una infracción de unicidad de PostgreSQL al guardar un pago.
  *
- * Keeping the Spring [org.springframework.dao.DataIntegrityViolationException] out of the port
- * contract prevents core code and tests from depending on a persistence framework.
+ * Mantener [org.springframework.dao.DataIntegrityViolationException] de Spring fuera del contrato
+ * del puerto evita que el código central y las pruebas dependan de un framework de persistencia.
  *
- * @param cause original infrastructure exception retained for diagnosis.
+ * @param cause excepción de infraestructura original conservada para el diagnóstico.
  */
 class DuplicatePaymentException(cause: Throwable) : RuntimeException("A payment already exists for the order", cause)

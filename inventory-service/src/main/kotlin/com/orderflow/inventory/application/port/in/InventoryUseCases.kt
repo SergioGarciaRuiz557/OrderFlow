@@ -9,14 +9,14 @@ import com.orderflow.inventory.domain.model.ReservationId
 import com.orderflow.inventory.domain.model.ReservationResult
 
 /**
- * Transport-independent input required to request a stock reservation.
+ * Entrada independiente del transporte necesaria para solicitar una reserva de existencias.
  *
- * REST or Kafka adapters can construct this command without introducing their transport
- * types into the application or domain layers.
+ * Los adaptadores REST o Kafka pueden construir este comando sin introducir sus tipos de transporte
+ * en las capas de aplicación o dominio.
  *
- * @property productId product whose available stock should be allocated.
- * @property orderId order receiving the allocation and serving as the idempotency key.
- * @property quantity positive number of units requested.
+ * @property productId producto cuyas existencias disponibles deben asignarse.
+ * @property orderId pedido que recibe la asignación y sirve como clave de idempotencia.
+ * @property quantity número positivo de unidades solicitadas.
  */
 data class ReserveInventoryCommand(
     val productId: ProductId,
@@ -25,54 +25,54 @@ data class ReserveInventoryCommand(
 )
 
 /**
- * Inbound application port for allocating product stock to an order.
+ * Puerto de entrada de la aplicación para asignar existencias de un producto a un pedido.
  *
- * The port exposes an explicit domain outcome and does not assume whether the caller is an HTTP
- * controller, a test, or the Kafka consumer.
+ * El puerto expone un resultado explícito del dominio y no presupone si el consumidor es un
+ * controlador HTTP, una prueba o el consumidor de Kafka.
  */
 fun interface ReserveInventoryUseCase {
     /**
-     * Attempts to reserve the stock described by [command].
+     * Intenta reservar las existencias descritas por [command].
      *
-     * @param command validated domain identifiers and positive requested quantity.
-     * @return an explicit accepted or rejected [ReservationResult].
+     * @param command identificadores de dominio validados y cantidad positiva solicitada.
+     * @return un [ReservationResult] explícito aceptado o rechazado.
      */
     fun reserve(command: ReserveInventoryCommand): ReservationResult
 }
 
-/** Inbound application port for compensating a previously accepted reservation. */
+/** Puerto de entrada de la aplicación para compensar una reserva aceptada previamente. */
 fun interface ReleaseInventoryUseCase {
     /**
-     * Releases the identified reservation if it is active.
+     * Libera la reserva identificada si está activa.
      *
-     * @param reservationId reservation to locate across inventory aggregates.
-     * @return an explicit result distinguishing release, duplicate release, and unknown identifier.
+     * @param reservationId reserva que se localizará entre los agregados de inventario.
+     * @return un resultado explícito que distingue la liberación, su duplicación y un identificador desconocido.
      */
     fun release(reservationId: ReservationId): ReleaseResult
 }
 
-/** Inbound query port for retrieving the current state of one inventory aggregate. */
+/** Puerto de consulta de entrada para recuperar el estado actual de un agregado de inventario. */
 fun interface GetInventoryUseCase {
     /**
-     * Looks up inventory by product.
+     * Busca el inventario por producto.
      *
-     * @param productId product whose stock and reservations are requested.
-     * @return the aggregate snapshot, or `null` when inventory has not been created for the product.
+     * @param productId producto cuyas existencias y reservas se solicitan.
+     * @return la instantánea del agregado, o `null` cuando no se ha creado un inventario para el producto.
      */
     fun get(productId: ProductId): InventoryItem?
 }
 
-/** Inbound administrative port for preparing or correcting available stock. */
+/** Puerto administrativo de entrada para preparar o corregir las existencias disponibles. */
 fun interface CreateOrUpdateInventoryUseCase {
     /**
-     * Creates inventory when absent or replaces the available quantity when present.
+     * Crea el inventario si no existe o sustituye la cantidad disponible si ya existe.
      *
-     * Existing reservation history is retained. This operation is intended for administration and
-     * development preparation rather than order-driven reservation processing.
+     * Se conserva el historial de reservas existente. Esta operación está destinada a la preparación
+     * administrativa y de desarrollo, no al procesamiento de reservas impulsado por pedidos.
      *
-     * @param productId product whose inventory is being prepared.
-     * @param quantity new available stock; must be zero or greater.
-     * @return persisted aggregate including its optimistic-lock version.
+     * @param productId producto cuyo inventario se está preparando.
+     * @param quantity nuevas existencias disponibles; debe ser igual o superior a cero.
+     * @return agregado persistido, incluida su versión de bloqueo optimista.
      */
     fun setAvailableQuantity(productId: ProductId, quantity: Int): InventoryItem
 }

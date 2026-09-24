@@ -11,22 +11,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-/** Handles a failed inventory reservation by cancelling the referenced order. */
+/** Gestiona una reserva de inventario fallida cancelando el pedido referenciado. */
 @Service
 public class HandleInventoryRejectedService implements HandleInventoryRejectedUseCase {
-    /** Aggregate persistence port. */
+    /** Puerto de persistencia del agregado. */
     private final OrderRepository repository;
-    /** Domain-event publication port. */
+    /** Puerto de publicación de eventos de dominio. */
     private final IntegrationMessagePublisher publisher;
-    /** Business-time provider. */
+    /** Proveedor del tiempo de negocio. */
     private final ClockProvider clock;
 
     /**
-     * Creates the rejected-inventory callback service.
+     * Crea el servicio de notificación de inventario rechazado.
      *
-     * @param repository aggregate persistence port
-     * @param publisher domain-event publication port
-     * @param clock business-time port
+     * @param repository puerto de persistencia del agregado
+     * @param publisher puerto de publicación de eventos de dominio
+     * @param clock puerto del tiempo de negocio
      */
     public HandleInventoryRejectedService(OrderRepository repository, IntegrationMessagePublisher publisher, ClockProvider clock) {
         this.repository = repository;
@@ -35,10 +35,10 @@ public class HandleInventoryRejectedService implements HandleInventoryRejectedUs
     }
 
     /**
-     * Loads, rejects, saves, and publishes the cancellation facts in one transaction.
+     * Carga, rechaza, guarda y publica los hechos de cancelación en una sola transacción.
      *
-     * @param orderId order referenced by the inventory result
-     * @param reason inventory rejection explanation
+     * @param orderId pedido al que hace referencia el resultado del inventario
+     * @param reason explicación del rechazo del inventario
      */
     @Override
     @Transactional

@@ -6,11 +6,11 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** Unit tests for infrastructure-independent application configuration. */
+/** Pruebas unitarias de la configuración de aplicación independiente de la infraestructura. */
 class InventoryConfigurationTest {
-    /** Ensures database round trips cannot change timestamps created by the application clock. */
+    /** Garantiza que los ciclos por la base de datos no cambien las marcas creadas por el reloj de aplicación. */
     @Test
-    fun `clock provider normalizes instants to PostgreSQL microsecond precision`() {
+    fun `el proveedor de reloj normaliza instantes a la precisión de microsegundos de PostgreSQL`() {
         val nanosecondInstant = Instant.parse("2026-01-01T00:00:00.123456789Z")
         val clock = Clock.fixed(nanosecondInstant, ZoneOffset.UTC)
 

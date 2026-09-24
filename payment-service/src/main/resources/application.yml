@@ -1,20 +1,20 @@
 spring:
   application:
-    # Logical service name used by Spring diagnostics and future observability integrations.
+    # Nombre lógico del servicio que usan los diagnósticos de Spring y las futuras integraciones de observabilidad.
     name: payment-service
   datasource:
-    # Local PostgreSQL defaults; deployment environments override values without changing the artifact.
+    # Valores locales predeterminados de PostgreSQL; los entornos de despliegue los sustituyen sin cambiar el artefacto.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/payment}
     username: ${DB_USERNAME:payment}
     password: ${DB_PASSWORD:payment}
   jpa:
-    # Prevents accidental lazy database access outside adapter-managed transactions.
+    # Evita el acceso diferido accidental a la base de datos fuera de las transacciones administradas por el adaptador.
     open-in-view: false
     hibernate:
-      # Flyway owns all schema changes; Hibernate only verifies mappings against the migrated schema.
+      # Flyway es responsable de todos los cambios del esquema; Hibernate solo verifica las asignaciones frente al esquema migrado.
       ddl-auto: validate
   flyway:
-    # Applies versioned payment migrations before Hibernate validates its entity mapping.
+    # Aplica las migraciones versionadas de pagos antes de que Hibernate valide la asignación de sus entidades.
     enabled: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

@@ -1,24 +1,24 @@
 package com.orderflow.order.domain.model;
 
 /**
- * Persisted lifecycle state of an {@link Order}.
+ * Estado persistido del ciclo de vida de un {@link Order}.
  *
- * <p>The enum describes possible states only. The aggregate methods decide which transitions are
- * valid and are the only production code allowed to change an order's state.</p>
+ * <p>El enum solo describe los estados posibles. Los métodos del agregado deciden qué transiciones son
+ * válidas y son el único código de producción que puede cambiar el estado de un pedido.</p>
  */
 public enum OrderStatus {
-    /** Aggregate exists but inventory has not yet been requested. */
+    /** El agregado existe, pero aún no se ha solicitado el inventario. */
     PENDING,
-    /** An inventory reservation request is awaiting a result. */
+    /** Una solicitud de reserva de inventario espera un resultado. */
     INVENTORY_RESERVATION_PENDING,
-    /** Inventory is reserved but payment has not yet been requested. */
+    /** El inventario está reservado, pero aún no se ha solicitado el pago. */
     INVENTORY_RESERVED,
-    /** Payment authorization is awaiting a result. */
+    /** La autorización del pago espera un resultado. */
     PAYMENT_PENDING,
-    /** Inventory and payment succeeded; this is a terminal successful state. */
+    /** El inventario y el pago se han completado correctamente; este es un estado terminal satisfactorio. */
     CONFIRMED,
-    /** Compensation or cancellation work must complete before terminal cancellation. */
+    /** El trabajo de compensación o cancelación debe completarse antes de la cancelación terminal. */
     CANCELLATION_PENDING,
-    /** The order has been cancelled; this is a terminal state. */
+    /** El pedido se ha cancelado; este es un estado terminal. */
     CANCELLED
 }

@@ -5,10 +5,10 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Business request to authorize the order total using its payment-method reference.
+ * Solicitud de negocio para autorizar el total del pedido mediante la referencia de su método de pago.
  *
- * @param orderId aggregate requiring payment authorization
- * @param occurredAt request time
+ * @param orderId agregado que requiere la autorización del pago
+ * @param occurredAt instante de la solicitud
  */
 public record PaymentAuthorizationRequested(OrderId orderId, Instant occurredAt) implements OrderDomainEvent {
 }

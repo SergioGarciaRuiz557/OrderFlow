@@ -12,15 +12,15 @@ import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 /**
- * PostgreSQL/JPA implementation of the framework-independent [InventoryRepository] port.
+ * Implementación PostgreSQL/JPA del puerto [InventoryRepository] independiente del framework.
  *
- * The adapter owns transaction boundaries for individual persistence operations, delegates query
- * execution to Spring Data, and converts entity graphs through [InventoryPersistenceMapper]. It also
- * translates framework exceptions into the application's concurrency vocabulary so higher layers do
- * not depend on Spring Data.
+ * El adaptador es responsable de las fronteras de transacción de las operaciones individuales de
+ * persistencia, delega la ejecución de consultas en Spring Data y convierte los grafos de entidades
+ * mediante [InventoryPersistenceMapper]. También traduce las excepciones del framework al vocabulario
+ * de concurrencia de la aplicación para que las capas superiores no dependan de Spring Data.
  *
- * @property repository technology-specific Spring Data repository.
- * @property mapper explicit translator between persistence and domain representations.
+ * @property repository repositorio de Spring Data específico de la tecnología.
+ * @property mapper traductor explícito entre las representaciones de persistencia y dominio.
  */
 @Repository
 class JpaInventoryRepositoryAdapter(
@@ -29,20 +29,20 @@ class JpaInventoryRepositoryAdapter(
 ) : InventoryRepository {
 
     /**
-     * Loads a complete inventory aggregate by product in a read-only transaction.
+     * Carga un agregado de inventario completo por producto en una transacción de solo lectura.
      *
-     * @param productId domain identifier converted to the database string key.
-     * @return mapped domain aggregate, or `null` when no row exists.
+     * @param productId identificador de dominio convertido en la clave String de la base de datos.
+     * @return agregado de dominio mapeado, o `null` cuando no existe ninguna fila.
      */
     @Transactional(readOnly = true)
     override fun findByProductId(productId: ProductId): InventoryItem? =
         repository.findAggregateByProductId(productId.value)?.let(mapper::toDomain)
 
     /**
-     * Finds the aggregate that owns a reservation in a read-only transaction.
+     * Busca el agregado al que pertenece una reserva en una transacción de solo lectura.
      *
-     * @param reservationId domain identifier converted to the UUID database key.
-     * @return complete owning aggregate, or `null` when the reservation is unknown.
+     * @param reservationId identificador de dominio convertido en la clave UUID de la base de datos.
+     * @return agregado propietario completo, o `null` cuando la reserva es desconocida.
      */
     @Transactional(readOnly = true)
     override fun findByReservationId(reservationId: ReservationId): InventoryItem? =
@@ -53,17 +53,18 @@ class JpaInventoryRepositoryAdapter(
         repository.findAggregatesByOrderId(orderId.value).map(mapper::toDomain)
 
     /**
-     * Inserts or optimistically updates a complete inventory aggregate.
+     * Inserta o actualiza de forma optimista un agregado de inventario completo.
      *
-     * `saveAndFlush` is important because it forces optimistic-lock and uniqueness violations to
-     * occur inside this method, where they can be translated consistently. A uniqueness violation
-     * may represent a race between new product inserts or duplicate product/order reservations, so
-     * it is treated as a concurrency conflict and the application reloads current state.
+     * `saveAndFlush` es importante porque fuerza que las infracciones de bloqueo optimista y unicidad
+     * se produzcan dentro de este método, donde pueden traducirse de forma coherente. Una infracción
+     * de unicidad puede representar una carrera entre inserciones de productos nuevos o reservas
+     * duplicadas de producto/pedido, por lo que se trata como un conflicto de concurrencia y la
+     * aplicación vuelve a cargar el estado actual.
      *
-     * @param inventoryItem immutable aggregate snapshot to persist.
-     * @return persisted domain snapshot containing the updated version.
-     * @throws ConcurrentInventoryModificationException when another transaction wins a conflicting
-     * update or insert.
+     * @param inventoryItem instantánea inmutable del agregado que se persistirá.
+     * @return instantánea persistida del dominio que contiene la versión actualizada.
+     * @throws ConcurrentInventoryModificationException cuando otra transacción prevalece en una
+     * actualización o inserción incompatible.
      */
     @Transactional
     override fun save(inventoryItem: InventoryItem): InventoryItem = try {
@@ -71,7 +72,7 @@ class JpaInventoryRepositoryAdapter(
     } catch (exception: OptimisticLockingFailureException) {
         throw ConcurrentInventoryModificationException(exception)
     } catch (exception: DataIntegrityViolationException) {
-        // A concurrent insert can race either the product PK or product/order uniqueness constraint.
+        // Una inserción concurrente puede competir por la clave primaria del producto o la restricción única producto/pedido.
         throw ConcurrentInventoryModificationException(exception)
     }
 }

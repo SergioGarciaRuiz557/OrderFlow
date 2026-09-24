@@ -5,10 +5,10 @@ import com.orderflow.order.domain.model.OrderId;
 import java.time.Instant;
 
 /**
- * Compensation request to release inventory that is no longer needed by an order.
+ * Solicitud de compensación para liberar el inventario que un pedido ya no necesita.
  *
- * @param orderId aggregate whose reservation must be released
- * @param occurredAt compensation request time
+ * @param orderId agregado cuya reserva debe liberarse
+ * @param occurredAt instante de la solicitud de compensación
  */
 public record InventoryReleaseRequested(OrderId orderId, Instant occurredAt) implements OrderDomainEvent {
 }

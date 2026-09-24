@@ -18,27 +18,27 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 /**
- * Converts failures from every REST controller into the stable {@link ApiError} contract.
+ * Convierte los fallos de todos los controladores REST al contrato estable {@link ApiError}.
  *
- * <p>Expected client and business errors retain useful messages. Infrastructure and unexpected
- * exceptions are logged with their stack traces but return deliberately generic messages so internal
- * implementation details are not exposed over HTTP.</p>
+ * <p>Los errores esperados del cliente y de negocio conservan mensajes útiles. Las excepciones de infraestructura
+ * e inesperadas se registran con sus trazas de pila, pero devuelven deliberadamente mensajes genéricos para que los
+ * detalles internos de implementación no queden expuestos mediante HTTP.</p>
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    /** Server-side logger used only for failures that require operator investigation. */
+    /** Registrador del servidor utilizado solo para fallos que requieren la investigación de un operador. */
     private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
-    /** Creates the stateless controller advice discovered by Spring component scanning. */
+    /** Crea el componente de asesoramiento del controlador sin estado que descubre el escaneo de componentes de Spring. */
     public ApiExceptionHandler() {
     }
 
     /**
-     * Combines all Bean Validation field failures into one readable 400 response.
+     * Combina todos los fallos de campo de Bean Validation en una respuesta 400 legible.
      *
-     * @param exception validation result raised before controller execution
-     * @param request servlet request used to report the failing path
-     * @return structured invalid-request response
+     * @param exception resultado de validación producido antes de ejecutar el controlador
+     * @param request petición del servlet utilizada para informar de la ruta que ha fallado
+     * @return respuesta estructurada de petición no válida
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> invalidRequest(MethodArgumentNotValidException exception, HttpServletRequest request) {
@@ -49,11 +49,11 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Handles malformed JSON and values that Spring cannot convert to controller argument types.
+     * Gestiona el JSON mal formado y los valores que Spring no puede convertir a tipos de argumentos del controlador.
      *
-     * @param exception parsing or conversion failure
-     * @param request failing request
-     * @return safe 400 response without parser internals
+     * @param exception fallo de análisis o conversión
+     * @param request petición que ha fallado
+     * @return respuesta 400 segura sin detalles internos del analizador
      */
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     ResponseEntity<ApiError> malformedRequest(Exception exception, HttpServletRequest request) {
@@ -61,11 +61,11 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Maps rejected domain values or transitions to a semantic 422 response.
+     * Mapea valores o transiciones del dominio rechazados a una respuesta semántica 422.
      *
-     * @param exception domain rejection with a business-safe message
-     * @param request failing request
-     * @return structured domain-invariant response
+     * @param exception rechazo del dominio con un mensaje seguro para el negocio
+     * @param request petición que ha fallado
+     * @return respuesta estructurada de invariante del dominio
      */
     @ExceptionHandler(DomainInvariantViolationException.class)
     ResponseEntity<ApiError> invariantViolation(DomainInvariantViolationException exception, HttpServletRequest request) {
@@ -73,11 +73,11 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Maps a missing aggregate to 404.
+     * Mapea un agregado ausente a 404.
      *
-     * @param exception application-level absence result
-     * @param request failing request
-     * @return structured not-found response
+     * @param exception resultado de ausencia del nivel de aplicación
+     * @param request petición que ha fallado
+     * @return respuesta estructurada de recurso no encontrado
      */
     @ExceptionHandler(OrderNotFoundException.class)
     ResponseEntity<ApiError> notFound(OrderNotFoundException exception, HttpServletRequest request) {
@@ -85,11 +85,11 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Logs database failures and hides SQL, credentials, and implementation details from clients.
+     * Registra los fallos de la base de datos y oculta a los clientes el SQL, las credenciales y los detalles de implementación.
      *
-     * @param exception Spring's technology-neutral data-access failure
-     * @param request failing request
-     * @return safe infrastructure-failure response
+     * @param exception fallo de acceso a datos de Spring independiente de la tecnología
+     * @param request petición que ha fallado
+     * @return respuesta segura de fallo de infraestructura
      */
     @ExceptionHandler(DataAccessException.class)
     ResponseEntity<ApiError> infrastructureFailure(DataAccessException exception, HttpServletRequest request) {
@@ -99,11 +99,11 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Last-resort protection for failures not classified by a more specific handler.
+     * Protección de último recurso para los fallos que no clasifica un gestor más específico.
      *
-     * @param exception unexpected failure logged for operators
-     * @param request failing request
-     * @return generic internal-error response
+     * @param exception fallo inesperado que se registra para los operadores
+     * @param request petición que ha fallado
+     * @return respuesta genérica de error interno
      */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpectedFailure(Exception exception, HttpServletRequest request) {
@@ -112,13 +112,13 @@ public class ApiExceptionHandler {
     }
 
     /**
-     * Central factory that keeps every error payload structurally identical.
+     * Factoría central que mantiene idéntica la estructura de todas las cargas útiles de error.
      *
-     * @param status HTTP status and numeric payload value
-     * @param code stable application error code
-     * @param message safe detail for the client
-     * @param request source of the failing URI
-     * @return response entity with matching HTTP and body status
+     * @param status estado HTTP y valor numérico de la carga útil
+     * @param code código estable de error de la aplicación
+     * @param message detalle seguro para el cliente
+     * @param request origen de la URI que ha fallado
+     * @return entidad de respuesta cuyo estado HTTP coincide con el del cuerpo
      */
     private ResponseEntity<ApiError> error(HttpStatus status, String code, String message, HttpServletRequest request) {
         return ResponseEntity.status(status)

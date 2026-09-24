@@ -1,177 +1,177 @@
-# Order Service code guide
+# Guía del código del servicio de pedidos
 
-This guide explains how a request travels through Order Service and what responsibility belongs to
-each class. It complements the Javadoc located next to the implementation; it does not replace the
-domain language and API documentation in the service README.
+Esta guía explica cómo recorre una petición Order Service y qué responsabilidad corresponde a
+cada clase. Complementa el Javadoc situado junto a la implementación; no sustituye el lenguaje
+de dominio ni la documentación de la API incluidos en el README del servicio.
 
-## Reading the service from the outside in
+## Lectura del servicio desde fuera hacia dentro
 
-The service follows hexagonal architecture. A useful reading order is:
+El servicio sigue una arquitectura hexagonal. Un orden de lectura útil es:
 
-1. `adapter/in/rest` receives and validates HTTP data.
-2. `application/port/in` declares the business capabilities available to inbound adapters.
-3. `application/service` coordinates a use case without reimplementing domain rules.
-4. `domain/model` validates values, calculates totals, and controls order transitions.
-5. `application/port/out` declares the infrastructure capabilities required by the application.
-6. `adapter/out/persistence` maps the aggregate to JPA and PostgreSQL.
-7. `adapter/in/kafka` and `adapter/out/kafka` map versioned JSON messages to and from those ports.
+1. `adapter/in/rest` recibe y valida los datos HTTP.
+2. `application/port/in` declara las capacidades de negocio disponibles para los adaptadores de entrada.
+3. `application/service` coordina un caso de uso sin volver a implementar las reglas de dominio.
+4. `domain/model` valida valores, calcula totales y controla las transiciones del pedido.
+5. `application/port/out` declara las capacidades de infraestructura que necesita la aplicación.
+6. `adapter/out/persistence` mapea el agregado a JPA y PostgreSQL.
+7. `adapter/in/kafka` y `adapter/out/kafka` mapean mensajes JSON versionados desde y hacia esos puertos.
 
-The dependency direction always points towards the domain. Domain classes have no Spring, JPA,
-HTTP, PostgreSQL, or Kafka imports.
+La dirección de las dependencias siempre apunta hacia el dominio. Las clases de dominio no importan
+Spring, JPA, HTTP, PostgreSQL ni Kafka.
 
-## Creating and retrieving an order
+## Creación y consulta de un pedido
 
 ### `POST /api/orders`
 
-1. Jackson converts JSON into `CreateOrderRequest`.
-2. Bean Validation rejects missing identifiers, empty item collections, non-positive quantities,
-   and negative prices before the controller invokes the application.
-3. `OrderController` maps transport values to `CreateOrderCommand` and calls
+1. Jackson convierte el JSON en `CreateOrderRequest`.
+2. Bean Validation rechaza identificadores ausentes, colecciones de artículos vacías, cantidades no positivas
+   y precios negativos antes de que el controlador invoque la aplicación.
+3. `OrderController` mapea los valores de transporte a `CreateOrderCommand` y llama a
    `CreateOrderUseCase`.
-4. `CreateOrderService` converts primitives into domain value objects. Those value objects validate
-   the same essential invariants independently of HTTP validation.
-5. `Order.create` calculates the total and records `OrderCreated`.
-6. The application asks the aggregate to request inventory. The aggregate moves from `PENDING` to
-   `INVENTORY_RESERVATION_PENDING` and records `InventoryReservationRequested`.
-7. `JpaOrderRepositoryAdapter` maps and saves the complete aggregate in one transaction.
-8. `IntegrationMessagePublisher` receives pending domain events and the Kafka adapter maps supported
-   events to order-keyed integration commands/events.
-9. The controller returns `201 Created`, the resource location, and `OrderResponse`.
+4. `CreateOrderService` convierte los valores primitivos en objetos de valor del dominio. Esos objetos validan
+   las mismas invariantes esenciales con independencia de la validación HTTP.
+5. `Order.create` calcula el total y registra `OrderCreated`.
+6. La aplicación pide al agregado que solicite inventario. El agregado pasa de `PENDING` a
+   `INVENTORY_RESERVATION_PENDING` y registra `InventoryReservationRequested`.
+7. `JpaOrderRepositoryAdapter` mapea y guarda el agregado completo en una sola transacción.
+8. `IntegrationMessagePublisher` recibe los eventos de dominio pendientes y el adaptador de Kafka mapea los
+   eventos admitidos a comandos o eventos de integración cuya clave es el pedido.
+9. El controlador devuelve `201 Created`, la ubicación del recurso y `OrderResponse`.
 
 ### `GET /api/orders/{orderId}`
 
-1. Spring converts the path value to `UUID`.
-2. `GetOrderService` creates an `OrderId` and loads through the repository port.
-3. The persistence mapper reconstructs the aggregate with `Order.rehydrate`. Rehydration recalculates
-   the line total and rejects corrupt persisted state, but does not recreate historical events.
-4. `OrderView` carries application output to the controller and `OrderResponse` carries it over HTTP.
+1. Spring convierte el valor de la ruta en `UUID`.
+2. `GetOrderService` crea un `OrderId` y carga el agregado mediante el puerto de repositorio.
+3. El mapeador de persistencia reconstruye el agregado con `Order.rehydrate`. La rehidratación vuelve a calcular
+   el total de las líneas y rechaza un estado persistido corrupto, pero no recrea eventos históricos.
+4. `OrderView` lleva la salida de la aplicación al controlador y `OrderResponse` la transporta mediante HTTP.
 
-## Asynchronous lifecycle callbacks
+## Notificaciones asíncronas del ciclo de vida
 
-Kafka listeners validate Inventory and Payment envelopes and call five application boundaries:
+Los listeners de Kafka validan los sobres de Inventory y Payment y llaman a cinco límites de la aplicación:
 
-| Input port | Application service | Aggregate behavior | Resulting state |
+| Puerto de entrada | Servicio de aplicación | Comportamiento del agregado | Estado resultante |
 | --- | --- | --- | --- |
-| `HandleInventoryReservedUseCase` | `HandleInventoryReservedService` | Marks inventory reserved, then requests payment | `PAYMENT_PENDING` |
-| `HandleInventoryRejectedUseCase` | `HandleInventoryRejectedService` | Records rejection and cancellation | `CANCELLED` |
-| `HandlePaymentAuthorizedUseCase` | `HandlePaymentAuthorizedService` | Records authorization and confirmation | `CONFIRMED` |
-| `HandlePaymentRejectedUseCase` | `HandlePaymentRejectedService` | Records rejection and asks for inventory release | `CANCELLATION_PENDING` |
-| `HandleInventoryReleasedUseCase` | `HandleInventoryReleasedService` | Completes cancellation after release | `CANCELLED` |
+| `HandleInventoryReservedUseCase` | `HandleInventoryReservedService` | Marca el inventario como reservado y después solicita el pago | `PAYMENT_PENDING` |
+| `HandleInventoryRejectedUseCase` | `HandleInventoryRejectedService` | Registra el rechazo y la cancelación | `CANCELLED` |
+| `HandlePaymentAuthorizedUseCase` | `HandlePaymentAuthorizedService` | Registra la autorización y la confirmación | `CONFIRMED` |
+| `HandlePaymentRejectedUseCase` | `HandlePaymentRejectedService` | Registra el rechazo y solicita la liberación del inventario | `CANCELLATION_PENDING` |
+| `HandleInventoryReleasedUseCase` | `HandleInventoryReleasedService` | Completa la cancelación tras la liberación | `CANCELLED` |
 
-Handlers load, call domain behavior, save, and publish in that order. They do not assign statuses
-directly. Repeated callbacks are handled by the aggregate so idempotency remains consistent for every
-possible inbound adapter.
+Los gestores cargan, llaman al comportamiento del dominio, guardan y publican, en ese orden. No asignan estados
+directamente. El agregado gestiona las notificaciones repetidas para que la idempotencia sea coherente para cualquier
+adaptador de entrada posible.
 
-## Class catalogue
+## Catálogo de clases
 
-### Bootstrap
+### Arranque
 
-- `OrderServiceApplication`: Spring Boot entry point and component-scanning root.
+- `OrderServiceApplication`: punto de entrada de Spring Boot y raíz del escaneo de componentes.
 
-### Domain model
+### Modelo de dominio
 
-- `Order`: aggregate root. Owns lines, total, lifecycle state, timestamps, optimistic-lock version,
-  and uncommitted domain events.
-- `OrderLine`: immutable product, quantity, and unit-price tuple; calculates its subtotal.
-- `OrderStatus`: exhaustive set of persisted lifecycle states.
-- `OrderId`, `CustomerId`, `ProductId`, `PaymentMethodId`: typed identifiers that prevent unrelated
-  strings or UUIDs from being accidentally interchanged.
-- `Quantity`: positive integer value object.
-- `Money`: non-negative `BigDecimal` amount and currency value object; currently accepts EUR only.
-- `DomainInvariantViolationException`: signals input or transitions rejected by domain rules.
+- `Order`: raíz del agregado. Posee las líneas, el total, el estado del ciclo de vida, las marcas temporales,
+  la versión de bloqueo optimista y los eventos de dominio no confirmados.
+- `OrderLine`: tupla inmutable de producto, cantidad y precio unitario; calcula su subtotal.
+- `OrderStatus`: conjunto exhaustivo de estados persistidos del ciclo de vida.
+- `OrderId`, `CustomerId`, `ProductId`, `PaymentMethodId`: identificadores con tipo que evitan intercambiar
+  accidentalmente cadenas o UUID que no guardan relación.
+- `Quantity`: objeto de valor entero positivo.
+- `Money`: objeto de valor con importe `BigDecimal` no negativo y divisa; actualmente solo admite EUR.
+- `DomainInvariantViolationException`: señala entradas o transiciones rechazadas por las reglas del dominio.
 
-### Domain events
+### Eventos de dominio
 
-- `OrderDomainEvent`: common event contract containing the aggregate identity and occurrence time.
-- `OrderCreated`: an aggregate was created successfully.
-- `InventoryReservationRequested`: inventory reservation must be attempted.
-- `InventoryReserved`: inventory accepted the reservation.
-- `InventoryRejected`: inventory rejected the reservation and supplies a reason.
-- `PaymentAuthorizationRequested`: payment authorization must be attempted.
-- `PaymentAuthorized`: payment accepted the authorization.
-- `PaymentRejected`: payment rejected the authorization and supplies a reason.
-- `InventoryReleaseRequested`: previously reserved inventory must be compensated/released.
-- `OrderConfirmed`: the order completed the pre-confirmation workflow.
-- `OrderCancelled`: the order reached its terminal cancelled state.
+- `OrderDomainEvent`: contrato común de evento que contiene la identidad del agregado y el instante en que ocurrió.
+- `OrderCreated`: un agregado se ha creado correctamente.
+- `InventoryReservationRequested`: debe intentarse reservar el inventario.
+- `InventoryReserved`: Inventory ha aceptado la reserva.
+- `InventoryRejected`: Inventory ha rechazado la reserva y proporciona un motivo.
+- `PaymentAuthorizationRequested`: debe intentarse autorizar el pago.
+- `PaymentAuthorized`: Payment ha aceptado la autorización.
+- `PaymentRejected`: Payment ha rechazado la autorización y proporciona un motivo.
+- `InventoryReleaseRequested`: debe compensarse o liberarse el inventario reservado previamente.
+- `OrderConfirmed`: el pedido ha completado el flujo previo a la confirmación.
+- `OrderCancelled`: el pedido ha alcanzado su estado terminal de cancelación.
 
-Events are domain facts, not Kafka payloads. Transport adapters are responsible for translating them
-to versioned integration contracts later.
+Los eventos son hechos del dominio, no cargas útiles de Kafka. Los adaptadores de transporte son responsables de traducirlos
+a contratos de integración versionados.
 
-### Application input and output
+### Entrada y salida de la aplicación
 
-- `CreateOrderUseCase` and its command records: creation boundary used by REST.
-- `GetOrderUseCase`: query boundary used by REST.
+- `CreateOrderUseCase` y sus records de comandos: límite de creación utilizado por REST.
+- `GetOrderUseCase`: límite de consulta utilizado por REST.
 - `HandleInventoryReservedUseCase`, `HandleInventoryRejectedUseCase`,
-  `HandlePaymentAuthorizedUseCase`, and `HandlePaymentRejectedUseCase`: callback boundaries intended
-  for future messaging adapters.
-- `OrderView`: stable application result independent of HTTP and persistence.
-- `OrderRepository`: persistence boundary expressed in aggregate terms.
-- `IntegrationMessagePublisher`: outbound event-publication boundary without Kafka types.
-- `ClockProvider`: supplies time deterministically in tests.
-- `OrderIdGenerator`: supplies aggregate identifiers deterministically in tests.
-- `OrderNotFoundException`: application-level absence result used by all inbound adapters.
+  `HandlePaymentAuthorizedUseCase` y `HandlePaymentRejectedUseCase`: límites de notificación destinados
+  a los adaptadores de mensajería.
+- `OrderView`: resultado estable de la aplicación, independiente de HTTP y la persistencia.
+- `OrderRepository`: límite de persistencia expresado en términos del agregado.
+- `IntegrationMessagePublisher`: límite de salida para publicar eventos sin tipos de Kafka.
+- `ClockProvider`: proporciona el tiempo de forma determinista en las pruebas.
+- `OrderIdGenerator`: proporciona identificadores del agregado de forma determinista en las pruebas.
+- `OrderNotFoundException`: resultado de ausencia del nivel de aplicación utilizado por todos los adaptadores de entrada.
 
-### Application services
+### Servicios de aplicación
 
-- `CreateOrderService`: constructs the aggregate, requests inventory, saves, and publishes.
-- `GetOrderService`: loads an aggregate and returns an application view.
-- `HandleInventoryReservedService`: advances a successful reservation to payment pending.
-- `HandleInventoryRejectedService`: cancels an order rejected by inventory.
-- `HandlePaymentAuthorizedService`: confirms an order after successful payment.
-- `HandlePaymentRejectedService`: begins compensation after failed payment.
-- `OrderApplicationSupport`: package-private implementation helper for consistent loading and
-  save-then-publish orchestration.
+- `CreateOrderService`: construye el agregado, solicita inventario, guarda y publica.
+- `GetOrderService`: carga un agregado y devuelve una vista de la aplicación.
+- `HandleInventoryReservedService`: hace avanzar una reserva correcta hasta el pago pendiente.
+- `HandleInventoryRejectedService`: cancela un pedido rechazado por Inventory.
+- `HandlePaymentAuthorizedService`: confirma un pedido tras un pago correcto.
+- `HandlePaymentRejectedService`: inicia la compensación tras un pago fallido.
+- `OrderApplicationSupport`: auxiliar de implementación con visibilidad de paquete para mantener coherentes la carga y la
+  orquestación de guardar y después publicar.
 
-### REST adapter
+### Adaptador REST
 
-- `CreateOrderRequest`: validated inbound JSON model.
-- `OrderResponse`: outbound JSON model and application-to-transport mapper.
-- `OrderController`: thin route definition and request/response mapping.
-- `ApiError`: stable error response structure.
-- `ApiExceptionHandler`: central exception-to-HTTP mapping that prevents stack-trace exposure.
+- `CreateOrderRequest`: modelo JSON de entrada validado.
+- `OrderResponse`: modelo JSON de salida y mapeador de la aplicación al transporte.
+- `OrderController`: definición ligera de rutas y mapeo de peticiones y respuestas.
+- `ApiError`: estructura estable de la respuesta de error.
+- `ApiExceptionHandler`: mapeo central de excepciones a HTTP que evita exponer trazas de pila.
 
-### Persistence and infrastructure adapters
+### Adaptadores de persistencia e infraestructura
 
-- `JpaOrderEntity`: JPA representation of the `orders` table and owner of persisted line entities.
-- `JpaOrderLineEntity`: JPA representation of one `order_lines` row.
-- `SpringDataOrderRepository`: internal Spring Data CRUD mechanism; never crosses the adapter.
-- `OrderPersistenceMapper`: bidirectional, explicit mapping between JPA entities and the aggregate.
-- `JpaOrderRepositoryAdapter`: implements the application repository port using Spring Data.
-- `NoOpIntegrationMessagePublisher`: local messaging sink used until a Kafka adapter exists.
-- `SystemProvidersConfiguration`: production beans for current time and random UUID generation.
+- `JpaOrderEntity`: representación JPA de la tabla `orders` y propietaria de las entidades de línea persistidas.
+- `JpaOrderLineEntity`: representación JPA de una fila de `order_lines`.
+- `SpringDataOrderRepository`: mecanismo CRUD interno de Spring Data; nunca atraviesa el adaptador.
+- `OrderPersistenceMapper`: mapeo explícito y bidireccional entre las entidades JPA y el agregado.
+- `JpaOrderRepositoryAdapter`: implementa el puerto de repositorio de la aplicación mediante Spring Data.
+- `NoOpIntegrationMessagePublisher`: sumidero de mensajería local utilizado hasta que existe un adaptador de Kafka.
+- `SystemProvidersConfiguration`: beans de producción para la hora actual y la generación de UUID aleatorios.
 
-## Persistence details
+## Detalles de persistencia
 
-`V1__create_orders.sql` is the source of truth for the initial schema. Hibernate uses
-`ddl-auto=validate`, so it checks mappings but never creates or mutates production tables. The
-`orders.version` column is mapped with `@Version`; concurrent updates using an outdated aggregate
-therefore fail instead of silently overwriting newer state.
+`V1__create_orders.sql` es la fuente de verdad del esquema inicial. Hibernate utiliza
+`ddl-auto=validate`, por lo que comprueba los mapeos, pero nunca crea ni modifica tablas de producción. La
+columna `orders.version` se mapea con `@Version`; por ello, las actualizaciones concurrentes que utilizan un agregado obsoleto
+fallan en lugar de sobrescribir silenciosamente un estado más reciente.
 
-`JpaOrderEntity` and `JpaOrderLineEntity` intentionally contain persistence-oriented mutable fields
-and protected no-argument constructors required by JPA. They are not domain entities and must not be
-returned from application ports.
+`JpaOrderEntity` y `JpaOrderLineEntity` contienen deliberadamente campos mutables orientados a la persistencia
+y constructores protegidos sin argumentos requeridos por JPA. No son entidades de dominio y no deben
+devolverse desde los puertos de la aplicación.
 
-## Error flow
+## Flujo de errores
 
-`ApiExceptionHandler` classifies errors as follows:
+`ApiExceptionHandler` clasifica los errores de la siguiente manera:
 
-- invalid JSON, invalid path types, and Bean Validation failures: `400 INVALID_REQUEST`;
-- rejected domain invariants or transitions: `422 DOMAIN_INVARIANT_VIOLATION`;
-- missing aggregates: `404 ORDER_NOT_FOUND`;
-- Spring data-access failures: `500 INFRASTRUCTURE_FAILURE`;
-- any unexpected exception: `500 INTERNAL_ERROR`.
+- JSON no válido, tipos de ruta no válidos y fallos de Bean Validation: `400 INVALID_REQUEST`;
+- invariantes o transiciones del dominio rechazadas: `422 DOMAIN_INVARIANT_VIOLATION`;
+- agregados ausentes: `404 ORDER_NOT_FOUND`;
+- fallos de acceso a datos de Spring: `500 INFRASTRUCTURE_FAILURE`;
+- cualquier excepción inesperada: `500 INTERNAL_ERROR`.
 
-Infrastructure exceptions are logged on the server. HTTP clients receive stable messages and never
-Java stack traces.
+Las excepciones de infraestructura se registran en el servidor. Los clientes HTTP reciben mensajes estables y nunca
+trazas de pila de Java.
 
-## Tests
+## Pruebas
 
-- `OrderTest` exercises aggregate creation, totals, invariants, transitions, compensation events,
-  and duplicate callbacks without Spring.
-- `CreateOrderServiceTest` verifies creation orchestration with mocked output ports.
-- `HandleInventoryReservedServiceTest` verifies successful inventory orchestration with mocked ports.
-- `OrderServiceIntegrationTest` starts PostgreSQL with Testcontainers and verifies Flyway, aggregate
-  persistence/rehydration, REST creation/retrieval, and structured validation errors.
+- `OrderTest` prueba la creación del agregado, los totales, las invariantes, las transiciones, los eventos de compensación
+  y las notificaciones duplicadas sin Spring.
+- `CreateOrderServiceTest` verifica la orquestación de la creación con puertos de salida simulados.
+- `HandleInventoryReservedServiceTest` verifica la orquestación correcta del inventario con puertos simulados.
+- `OrderServiceIntegrationTest` inicia PostgreSQL con Testcontainers y verifica Flyway, la persistencia y rehidratación
+  del agregado, la creación y consulta REST, y los errores de validación estructurados.
 
-The integration container is disposable and separate from the persistent development database in
+El contenedor de integración es desechable e independiente de la base de datos persistente de desarrollo definida en
 `compose.yaml`.

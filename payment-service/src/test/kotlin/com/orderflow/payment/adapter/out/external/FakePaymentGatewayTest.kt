@@ -13,18 +13,18 @@ import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 
 /**
- * Standalone contract tests for the deterministic fake gateway adapter.
+ * Pruebas de contrato independientes para el adaptador determinista de la pasarela simulada.
  *
- * These tests prove the fake distinguishes provider business outcomes from technical failures and
- * remains deterministic without requiring Spring, PostgreSQL, or external network access.
+ * Estas pruebas demuestran que la simulación distingue los resultados de negocio del proveedor de
+ * los fallos técnicos y que permanece determinista sin requerir Spring, PostgreSQL ni acceso externo a la red.
  */
 class FakePaymentGatewayTest {
-    /** Stateless adapter under test, constructed directly rather than through Spring. */
+    /** Adaptador sin estado sometido a prueba, construido directamente en lugar de mediante Spring. */
     private val gateway = FakePaymentGateway()
 
-    /** Verifies equal idempotent requests always produce the same successful provider reference. */
+    /** Verifica que las solicitudes idempotentes iguales siempre produzcan la misma referencia satisfactoria del proveedor. */
     @Test
-    fun `success method returns stable provider reference`() {
+    fun `el método satisfactorio devuelve una referencia estable del proveedor`() {
         val request = request("pm-test-success")
 
         val first = gateway.authorize(request)
@@ -34,24 +34,24 @@ class FakePaymentGatewayTest {
         assertTrue(first is GatewayAuthorizationResult.Authorized)
     }
 
-    /** Verifies the configured decline token returns a normal business result instead of throwing. */
+    /** Verifica que el token de rechazo configurado devuelva un resultado de negocio normal en lugar de lanzar una excepción. */
     @Test
-    fun `rejected method is a business result`() {
+    fun `el método rechazado es un resultado de negocio`() {
         assertTrue(gateway.authorize(request("pm-test-rejected")) is GatewayAuthorizationResult.Rejected)
     }
 
-    /** Verifies the configured infrastructure-error token crosses the technical exception boundary. */
+    /** Verifica que el token configurado de error de infraestructura atraviese el límite de las excepciones técnicas. */
     @Test
-    fun `error method is a technical exception`() {
+    fun `el método de error es una excepción técnica`() {
         assertThrows(PaymentGatewayException::class.java) {
             gateway.authorize(request("pm-test-error"))
         }
     }
 
     /**
-     * Creates a valid provider-neutral request while varying only the scenario-driving method token.
+     * Crea una solicitud válida e independiente del proveedor variando solo el token del método que determina el escenario.
      *
-     * @param method fake payment-method token selecting the expected behavior.
+     * @param method token simulado del método de pago que selecciona el comportamiento esperado.
      */
     private fun request(method: String) = PaymentGatewayRequest(
         OrderId("order-1"),

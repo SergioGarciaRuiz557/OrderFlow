@@ -2,7 +2,7 @@ package com.orderflow.order.application.port.in;
 
 import java.util.UUID;
 
-/** Inbound boundary for completing cancellation after Inventory confirms compensation. */
+/** Límite de entrada para completar la cancelación después de que Inventory confirme la compensación. */
 public interface HandleInventoryReleasedUseCase {
     void handle(UUID orderId);
 }

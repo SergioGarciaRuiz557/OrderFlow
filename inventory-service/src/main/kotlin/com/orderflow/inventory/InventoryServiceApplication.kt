@@ -4,23 +4,23 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 /**
- * Spring Boot entry-point configuration for the Inventory Service.
+ * Configuración del punto de entrada de Spring Boot para Inventory Service.
  *
- * Placing [SpringBootApplication] at the root `com.orderflow.inventory` package makes Spring scan
- * all adapters, application services, and configuration classes below this package. The class is
- * intentionally empty because its responsibility is declarative: it marks the boundary of this
- * independently deployable service and enables Spring Boot auto-configuration.
+ * Situar [SpringBootApplication] en el paquete raíz `com.orderflow.inventory` hace que Spring examine
+ * todos los adaptadores, servicios de aplicación y clases de configuración que contiene. La clase
+ * está vacía de forma intencionada porque su responsabilidad es declarativa: marca la frontera de
+ * este servicio desplegable de forma independiente y activa la configuración automática de Spring Boot.
  */
 @SpringBootApplication
 class InventoryServiceApplication
 
 /**
- * Starts the Inventory Service as a standalone JVM process.
+ * Inicia Inventory Service como un proceso JVM autónomo.
  *
- * Command-line arguments are forwarded unchanged to Spring Boot so standard options such as
- * profile selection and configuration overrides continue to work.
+ * Los argumentos de línea de comandos se reenvían sin cambios a Spring Boot para que sigan
+ * funcionando opciones estándar como la selección de perfiles y la sobrescritura de configuración.
  *
- * @param args arguments received from the operating system when the process is launched.
+ * @param args argumentos recibidos del sistema operativo al iniciar el proceso.
  */
 fun main(args: Array<String>) {
     runApplication<InventoryServiceApplication>(*args)

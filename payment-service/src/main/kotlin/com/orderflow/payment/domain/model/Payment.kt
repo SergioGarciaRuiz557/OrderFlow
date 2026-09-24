@@ -3,45 +3,47 @@ package com.orderflow.payment.domain.model
 import java.time.Instant
 
 /**
- * Complete and intentionally small lifecycle of a payment authorization.
+ * Ciclo de vida completo e intencionadamente reducido de una autorización de pago.
  *
- * There is no generic status setter. [Payment] behavior controls transitions so terminal outcomes
- * cannot return to `PENDING` or change from rejection to authorization.
+ * No existe un asignador genérico del estado. El comportamiento de [Payment] controla las
+ * transiciones para que los resultados terminales no puedan volver a `PENDING` ni pasar de rechazo
+ * a autorización.
  */
 enum class PaymentStatus {
-    /** Created and persisted, but no definitive provider decision has been applied yet. */
+    /** Creado y conservado, pero todavía sin una decisión definitiva del proveedor. */
     PENDING,
 
-    /** The provider approved the amount and supplied a traceable authorization reference. */
+    /** El proveedor aprobó el importe y proporcionó una referencia de autorización rastreable. */
     AUTHORIZED,
 
-    /** The provider returned a definitive business rejection with a reason. */
+    /** El proveedor devolvió un rechazo de negocio definitivo con un motivo. */
     REJECTED,
 }
 
 /**
- * Aggregate root of the Payment bounded context.
+ * Raíz del agregado del contexto delimitado de Pagos.
  *
- * The aggregate owns authorization state and guarantees that provider references, rejection reasons,
- * timestamps, and status always form a coherent snapshot. It is immutable: behavior returns a new
- * [Payment] instead of mutating fields, which makes invalid intermediate states impossible and works
- * naturally with optimistic locking.
+ * El agregado posee el estado de autorización y garantiza que las referencias del proveedor, los
+ * motivos de rechazo, las marcas de tiempo y el estado siempre formen una instantánea coherente. Es
+ * inmutable: el comportamiento devuelve un [Payment] nuevo en lugar de mutar campos, lo que impide
+ * estados intermedios no válidos y encaja de forma natural con el bloqueo optimista.
  *
- * The primary constructor is private. New business instances must use [pending], while the persistence
- * adapter uses [reconstitute]. Both paths execute the same `init` invariants. `@ConsistentCopyVisibility`
- * ensures the generated data-class `copy` method remains private like the constructor, preventing
- * callers from bypassing lifecycle behavior.
+ * El constructor principal es privado. Las nuevas instancias de negocio deben usar [pending],
+ * mientras que el adaptador de persistencia usa [reconstitute]. Ambas rutas ejecutan los mismos
+ * invariantes de `init`. `@ConsistentCopyVisibility` garantiza que el método `copy` generado para la
+ * clase de datos siga siendo privado como el constructor, evitando que los llamadores eludan el
+ * comportamiento del ciclo de vida.
  *
- * @property id technical aggregate identifier and database primary key.
- * @property orderId business idempotency key; only one payment is permitted per order.
- * @property amount explicit, normalized monetary amount requested for authorization.
- * @property paymentMethodId opaque provider payment-method token.
- * @property status current lifecycle state.
- * @property providerReference provider authorization reference, present only when authorized.
- * @property failureReason business rejection reason, present only when rejected.
- * @property createdAt immutable time at which the pending payment was created.
- * @property updatedAt time of the most recent successful domain transition.
- * @property version JPA optimistic-lock token, or `null` before first persistence.
+ * @property id identificador técnico del agregado y clave primaria de la base de datos.
+ * @property orderId clave de idempotencia de negocio; solo se permite un pago por pedido.
+ * @property amount importe monetario explícito y normalizado solicitado para la autorización.
+ * @property paymentMethodId token opaco del método de pago del proveedor.
+ * @property status estado actual del ciclo de vida.
+ * @property providerReference referencia de autorización del proveedor, presente solo cuando está autorizado.
+ * @property failureReason motivo de rechazo de negocio, presente solo cuando está rechazado.
+ * @property createdAt instante inmutable en el que se creó el pago pendiente.
+ * @property updatedAt instante de la transición satisfactoria de dominio más reciente.
+ * @property version token de bloqueo optimista de JPA, o `null` antes de la primera persistencia.
  */
 @ConsistentCopyVisibility
 data class Payment private constructor(
@@ -56,12 +58,12 @@ data class Payment private constructor(
     val updatedAt: Instant,
     val version: Long?,
 ) {
-    /** Validates invariants shared by newly created, transitioned, and database-loaded snapshots. */
+    /** Valida los invariantes comunes a las instantáneas nuevas, transitadas y cargadas desde la base de datos. */
     init {
-        // Lifecycle timestamps must be monotonic even if a caller provides a custom ClockProvider.
+        // Las marcas de tiempo del ciclo de vida deben ser monótonas aunque un llamador proporcione un ClockProvider personalizado.
         require(!updatedAt.isBefore(createdAt)) { "Payment update time cannot precede creation time" }
 
-        // These exhaustive checks make the nullable outcome fields valid only in their logical state.
+        // Estas comprobaciones exhaustivas hacen que los campos anulables de resultado solo sean válidos en su estado lógico.
         when (status) {
             PaymentStatus.PENDING -> require(providerReference == null && failureReason == null) {
                 "Pending payments cannot contain an authorization outcome"
@@ -76,20 +78,21 @@ data class Payment private constructor(
     }
 
     /**
-     * Applies the provider's successful authorization decision.
+     * Aplica la decisión satisfactoria de autorización del proveedor.
      *
-     * Only a pending payment may be authorized. The returned snapshot contains the provider reference
-     * and transition time while retaining immutable request data and persistence version. Calling this
-     * method on an authorized or rejected payment is a programming/domain-state error.
+     * Solo se puede autorizar un pago pendiente. La instantánea devuelta contiene la referencia del
+     * proveedor y el instante de transición, y conserva los datos inmutables de la solicitud y la
+     * versión de persistencia. Llamar a este método sobre un pago autorizado o rechazado constituye
+     * un error de programación o de estado del dominio.
      *
-     * @param reference non-blank provider reference proving the successful authorization.
-     * @param at authoritative transition time supplied by the application clock.
-     * @return a new authorized aggregate snapshot.
-     * @throws IllegalStateException when this payment is no longer pending.
-     * @throws IllegalArgumentException when [at] precedes [createdAt].
+     * @param reference referencia no vacía del proveedor que acredita la autorización satisfactoria.
+     * @param at instante autoritativo de transición proporcionado por el reloj de la aplicación.
+     * @return una nueva instantánea autorizada del agregado.
+     * @throws IllegalStateException cuando este pago ya no está pendiente.
+     * @throws IllegalArgumentException cuando [at] es anterior a [createdAt].
      */
     fun authorize(reference: PaymentProviderReference, at: Instant): Payment {
-        // Guarding before `copy` prevents terminal-state transitions and duplicate authorization.
+        // La protección previa a `copy` evita transiciones desde estados terminales y autorizaciones duplicadas.
         check(status == PaymentStatus.PENDING) { "Only a pending payment can be authorized" }
         return copy(
             status = PaymentStatus.AUTHORIZED,
@@ -99,17 +102,17 @@ data class Payment private constructor(
     }
 
     /**
-     * Applies a definitive business rejection returned by the provider.
+     * Aplica un rechazo de negocio definitivo devuelto por el proveedor.
      *
-     * Technical failures must never call this method; they leave the persisted payment pending and
-     * propagate as an exception so infrastructure can retry. Like authorization, rejection is a
-     * terminal transition and can occur only once.
+     * Los fallos técnicos nunca deben llamar a este método; dejan pendiente el pago conservado y se
+     * propagan como excepción para que la infraestructura pueda reintentarlo. Al igual que la
+     * autorización, el rechazo es una transición terminal y solo puede producirse una vez.
      *
-     * @param reason non-blank business reason explaining the provider decision.
-     * @param at authoritative transition time supplied by the application clock.
-     * @return a new rejected aggregate snapshot.
-     * @throws IllegalStateException when this payment is no longer pending.
-     * @throws IllegalArgumentException when [at] precedes [createdAt].
+     * @param reason motivo de negocio no vacío que explica la decisión del proveedor.
+     * @param at instante autoritativo de transición proporcionado por el reloj de la aplicación.
+     * @return una nueva instantánea rechazada del agregado.
+     * @throws IllegalStateException cuando este pago ya no está pendiente.
+     * @throws IllegalArgumentException cuando [at] es anterior a [createdAt].
      */
     fun reject(reason: PaymentFailureReason, at: Instant): Payment {
         check(status == PaymentStatus.PENDING) { "Only a pending payment can be rejected" }
@@ -121,28 +124,30 @@ data class Payment private constructor(
     }
 
     /**
-     * Determines whether an incoming retry represents the exact original business request.
+     * Determina si un reintento entrante representa exactamente la solicitud de negocio original.
      *
-     * Order identity alone finds the idempotency record; amount and payment method must also match.
-     * A changed request is a conflict rather than a harmless retry and is rejected by the application.
+     * La identidad del pedido basta para encontrar el registro de idempotencia, pero también deben
+     * coincidir el importe y el método de pago. Una solicitud modificada es un conflicto, no un
+     * reintento inocuo, y la aplicación la rechaza.
      *
-     * @param amount amount supplied by the repeated command.
-     * @param paymentMethodId payment instrument supplied by the repeated command.
-     * @return `true` only when both immutable request attributes match.
+     * @param amount importe proporcionado por el comando repetido.
+     * @param paymentMethodId instrumento de pago proporcionado por el comando repetido.
+     * @return `true` solo cuando coinciden ambos atributos inmutables de la solicitud.
      */
     fun matches(amount: Money, paymentMethodId: PaymentMethodId): Boolean =
         this.amount == amount && this.paymentMethodId == paymentMethodId
 
-    /** Controlled construction paths for new and persisted aggregate snapshots. */
+    /** Rutas de construcción controladas para instantáneas nuevas y conservadas del agregado. */
     companion object {
         /**
-         * Creates a new payment before any definitive provider outcome exists.
+         * Crea un pago nuevo antes de que exista un resultado definitivo del proveedor.
          *
-         * Outcome fields begin empty, both timestamps share the creation time, and [version] remains
-         * `null` until JPA inserts the row. The application persists this state before it interprets a
-         * technical gateway failure, enabling a later retry to locate the same business operation.
+         * Los campos de resultado comienzan vacíos, ambas marcas de tiempo comparten el instante de
+         * creación y [version] permanece como `null` hasta que JPA inserta la fila. La aplicación
+         * conserva este estado antes de interpretar un fallo técnico de la pasarela, lo que permite
+         * que un reintento posterior encuentre la misma operación de negocio.
          *
-         * @return a valid, not-yet-persisted pending aggregate.
+         * @return un agregado pendiente válido que todavía no se ha conservado.
          */
         fun pending(
             id: PaymentId,
@@ -164,14 +169,14 @@ data class Payment private constructor(
         )
 
         /**
-         * Rebuilds a payment from trusted persistence primitives through domain value objects.
+         * Reconstruye un pago a partir de primitivas fiables de persistencia mediante objetos de valor del dominio.
          *
-         * This is not a back door around invariants: the private constructor and `init` block validate
-         * lifecycle consistency and timestamps. A non-null version is required because this path is
-         * exclusively for rows that already exist in PostgreSQL.
+         * No es una puerta trasera que eluda los invariantes: el constructor privado y el bloque
+         * `init` validan la coherencia del ciclo de vida y las marcas de tiempo. Se requiere una versión
+         * no nula porque esta ruta se destina exclusivamente a filas que ya existen en PostgreSQL.
          *
-         * @return immutable domain representation of one persisted payment row.
-         * @throws IllegalArgumentException when stored state violates an aggregate invariant.
+         * @return representación inmutable en el dominio de una fila de pago conservada.
+         * @throws IllegalArgumentException cuando el estado almacenado infringe un invariante del agregado.
          */
         fun reconstitute(
             id: PaymentId,

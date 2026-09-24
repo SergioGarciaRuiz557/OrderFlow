@@ -8,22 +8,22 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Stable JSON representation returned by Order REST endpoints.
+ * Representación JSON estable que devuelven los endpoints REST de Order.
  *
- * @param orderId aggregate UUID
- * @param status current lifecycle state
- * @param total domain-calculated decimal total
- * @param currency ISO currency code
- * @param createdAt creation timestamp
- * @param updatedAt latest transition timestamp
+ * @param orderId UUID del agregado
+ * @param status estado actual del ciclo de vida
+ * @param total total decimal calculado por el dominio
+ * @param currency código ISO de la divisa
+ * @param createdAt marca temporal de creación
+ * @param updatedAt marca temporal de la última transición
  */
 public record OrderResponse(UUID orderId, OrderStatus status, BigDecimal total, String currency,
                             Instant createdAt, Instant updatedAt) {
     /**
-     * Maps an application result to its HTTP representation.
+     * Mapea un resultado de la aplicación a su representación HTTP.
      *
-     * @param view application result
-     * @return response DTO with no domain objects exposed
+     * @param view resultado de la aplicación
+     * @return DTO de respuesta sin objetos del dominio expuestos
      */
     static OrderResponse from(OrderView view) {
         return new OrderResponse(view.orderId(), view.status(), view.total(), view.currency(),

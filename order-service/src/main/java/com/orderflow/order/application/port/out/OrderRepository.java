@@ -6,25 +6,25 @@ import com.orderflow.order.domain.model.OrderId;
 import java.util.Optional;
 
 /**
- * Outbound persistence boundary expressed only in domain types.
+ * Límite de persistencia de salida expresado únicamente mediante tipos del dominio.
  *
- * <p>The port deliberately does not extend Spring Data. This lets application services operate
- * without knowing whether storage uses JPA, another database, or an in-memory test double.</p>
+ * <p>El puerto deliberadamente no extiende Spring Data. Esto permite que los servicios de aplicación funcionen
+ * sin saber si el almacenamiento utiliza JPA, otra base de datos o un doble de pruebas en memoria.</p>
  */
 public interface OrderRepository {
     /**
-     * Inserts or updates the complete aggregate.
+     * Inserta o actualiza el agregado completo.
      *
-     * @param order aggregate to persist
-     * @return rehydrated saved aggregate, including its current persistence version
+     * @param order agregado que se persistirá
+     * @return agregado guardado y rehidratado, incluida su versión de persistencia actual
      */
     Order save(Order order);
 
     /**
-     * Finds an aggregate without converting absence into an infrastructure exception.
+     * Busca un agregado sin convertir su ausencia en una excepción de infraestructura.
      *
-     * @param orderId requested identity
-     * @return aggregate when present
+     * @param orderId identidad solicitada
+     * @return agregado cuando está presente
      */
     Optional<Order> findById(OrderId orderId);
 }

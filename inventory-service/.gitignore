@@ -1,5 +1,5 @@
-# The repository-level `out/` rule is intended for build output, but these are
-# source packages in the established hexagonal architecture.
+# La regla `out/` del repositorio está destinada a la salida de compilación, pero estos son
+# paquetes de código fuente de la arquitectura hexagonal establecida.
 !src/main/kotlin/com/orderflow/inventory/adapter/out/
 !src/main/kotlin/com/orderflow/inventory/adapter/out/**
 !src/main/kotlin/com/orderflow/inventory/application/port/out/
