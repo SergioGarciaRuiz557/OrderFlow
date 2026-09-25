@@ -1,0 +1,2060 @@
+# OrderFlow - pruebas manuales completas
+#
+# Cliente objetivo: HTTP Client de IntelliJ IDEA 2026.1 o posterior; los bloques usan scripts JS,
+# btoa/atob y sleep.
+# NO use "Run All Requests": este archivo contiene escenarios alternativos, errores deliberados y
+# mensajes venenosos. Ejecute, en orden, solo los bloques del escenario que quiera comprobar.
+#
+# Superficies públicas reales del proyecto:
+#   - order-service:     POST /api/orders, GET /api/orders/{orderId}
+#   - inventory-service: PUT /api/inventory/{productId}, GET /api/inventory/{productId}
+#   - payment-service:   sin HTTP; entrada/salida exclusivamente por Kafka
+#   - notification-service: sin HTTP; entrada exclusivamente por Kafka
+# Los eventos de dominio internos de Order (OrderCreated, InventoryReservationRequested, etc.) no son
+# contratos públicos ni tienen adaptador de entrada; los diez mensajes Kafka públicos sí están aquí.
+#
+# Kafka usa el protocolo binario en :9092, no HTTP. Para que las peticiones de eventos de este archivo
+# sean ejecutables, compose.yaml ofrece un REST Proxy opcional en :8082:
+#   docker compose --profile manual-testing up -d --wait
+#
+# Order necesita además su PostgreSQL independiente:
+#   docker compose -f order-service/compose.yaml up -d --wait
+#
+# Payment no tiene compose propio. Antes de arrancarlo, proporcione una base PostgreSQL "payment"
+# y configure DB_URL/DB_USERNAME/DB_PASSWORD. Inventory usa por defecto localhost:5432 y Order :5433.
+#
+# Arranque cada aplicación desde su directorio con gradlew.bat bootRun. Para el flujo E2E deben estar
+# activos Order, Inventory, Payment y Notification, además de sus bases de datos y Kafka.
+#
+# Las peticiones Kafka se envían en el formato binary v2 del REST Proxy. Los scripts codifican la clave
+# y el JSON a Base64 para reproducir exactamente StringSerializer/StringDeserializer. Una respuesta 200
+# del proxy confirma la escritura en Kafka, no el procesamiento de negocio; compruébelo con los GET,
+# los logs o el consumidor observador incluido más abajo.
+
+@orderBaseUrl = http://localhost:8081
+@inventoryBaseUrl = http://localhost:8080
+@kafkaRestBaseUrl = http://localhost:8082
+
+@inventoryCommandsTopic = order.inventory.commands
+@inventoryEventsTopic = inventory.order.events
+@paymentCommandsTopic = order.payment.commands
+@paymentEventsTopic = payment.order.events
+@orderEventsTopic = order.events
+
+@happyProduct = HTTP-HAPPY-001
+@noStockProduct = HTTP-NO-STOCK-001
+@rejectedPaymentProduct = HTTP-PAYMENT-REJECTED-001
+@unsupportedPaymentProduct = HTTP-PAYMENT-UNSUPPORTED-001
+@technicalPaymentProduct = HTTP-PAYMENT-ERROR-001
+@rollbackFirstProduct = HTTP-ROLLBACK-FIRST-001
+@rollbackMissingProduct = HTTP-ROLLBACK-MISSING-001
+@manualInventoryProduct = HTTP-MANUAL-INVENTORY-001
+
+@missingOrderId = 00000000-0000-0000-0000-000000000404
+
+
+### ============================================================================
+### 0. Infraestructura Kafka HTTP
+### ============================================================================
+
+# @name kafkaListTopics
+GET {{kafkaRestBaseUrl}}/topics
+Accept: application/vnd.kafka.v2+json
+
+> {%
+  client.test("Kafka REST Proxy responde", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200 del REST Proxy");
+  });
+%}
+
+
+### ============================================================================
+### 1. Todos los endpoints REST de Inventory
+### ============================================================================
+
+# @name inventoryCreateOrReplace
+PUT {{inventoryBaseUrl}}/api/inventory/{{happyProduct}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": 10
+}
+
+> {%
+  client.test("Inventory crea o sustituye existencias", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.productId === "HTTP-HAPPY-001", "productId inesperado");
+    client.assert(response.body.availableQuantity === 10, "stock inesperado");
+    client.assert(Array.isArray(response.body.reservations), "reservations debe ser un array");
+  });
+%}
+
+###
+
+# @name inventoryGetExisting
+GET {{inventoryBaseUrl}}/api/inventory/{{happyProduct}}
+Accept: application/json
+
+> {%
+  client.test("Inventory consulta un producto existente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.productId === "HTTP-HAPPY-001", "productId inesperado");
+  });
+%}
+
+###
+
+# Cero es una cantidad disponible válida.
+# @name inventorySetZero
+PUT {{inventoryBaseUrl}}/api/inventory/HTTP-ZERO-001
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": 0
+}
+
+> {%
+  client.test("Inventory acepta stock cero", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 0, "El stock debe ser cero");
+  });
+%}
+
+###
+
+# @name inventoryGetMissing
+GET {{inventoryBaseUrl}}/api/inventory/HTTP-DOES-NOT-EXIST
+Accept: application/json
+
+> {%
+  client.test("Inventory devuelve 404 si el producto no existe", function () {
+    client.assert(response.status === 404, "Se esperaba HTTP 404");
+  });
+%}
+
+###
+
+# @name inventoryRejectNegativeQuantity
+PUT {{inventoryBaseUrl}}/api/inventory/HTTP-INVALID-NEGATIVE
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": -1
+}
+
+> {%
+  client.test("Inventory rechaza stock negativo", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+  });
+%}
+
+###
+
+# @name inventoryRejectMalformedBody
+PUT {{inventoryBaseUrl}}/api/inventory/HTTP-INVALID-BODY
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity":
+}
+
+> {%
+  client.test("Inventory rechaza JSON mal formado", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+  });
+%}
+
+
+### ============================================================================
+### 2. Todos los endpoints REST de Order y sus errores de transporte
+### ============================================================================
+
+# Este POST también inicia el flujo distribuido si Kafka está habilitado.
+# @name orderCreateBasic
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{happyProduct}}",
+      "quantity": 1,
+      "unitPrice": 12.34
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.test("Order crea un pedido", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+    client.assert(response.headers.valueOf("Location") !== null, "Falta Location");
+    client.assert(response.body.orderId !== undefined, "Falta orderId");
+    client.assert(response.body.status === "INVENTORY_RESERVATION_PENDING", "Estado inicial inesperado");
+    client.assert(Number(response.body.total) === 12.34, "Total inesperado");
+    client.assert(response.body.currency === "EUR", "Divisa inesperada");
+  });
+  client.global.set("basicOrderId", response.body.orderId);
+%}
+
+###
+
+# Ejecute orderCreateBasic antes de este GET.
+# @name orderGetCreated
+GET {{orderBaseUrl}}/api/orders/{{basicOrderId}}
+Accept: application/json
+
+> {%
+  client.test("Order consulta un pedido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.orderId === client.global.get("basicOrderId"), "orderId inesperado");
+  });
+%}
+
+###
+
+# @name orderGetMissing
+GET {{orderBaseUrl}}/api/orders/{{missingOrderId}}
+Accept: application/json
+
+> {%
+  client.test("Order devuelve su contrato 404", function () {
+    client.assert(response.status === 404, "Se esperaba HTTP 404");
+    client.assert(response.body.code === "ORDER_NOT_FOUND", "Código inesperado");
+    client.assert(response.body.path === "/api/orders/00000000-0000-0000-0000-000000000404", "Path inesperado");
+  });
+%}
+
+###
+
+# @name orderRejectMalformedPathId
+GET {{orderBaseUrl}}/api/orders/not-a-uuid
+Accept: application/json
+
+> {%
+  client.test("Order rechaza un UUID de ruta inválido", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+    client.assert(response.body.code === "INVALID_REQUEST", "Código inesperado");
+  });
+%}
+
+###
+
+# @name orderRejectEmptyRequest
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": null,
+  "items": [],
+  "paymentMethodId": ""
+}
+
+> {%
+  client.test("Order aplica Bean Validation", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+    client.assert(response.body.code === "INVALID_REQUEST", "Código inesperado");
+  });
+%}
+
+###
+
+# @name orderRejectInvalidLine
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "",
+      "quantity": 0,
+      "unitPrice": -0.01
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.test("Order valida recursivamente las líneas", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+    client.assert(response.body.code === "INVALID_REQUEST", "Código inesperado");
+  });
+%}
+
+###
+
+# @name orderRejectMalformedJson
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "not-closed"
+
+> {%
+  client.test("Order rechaza JSON mal formado", function () {
+    client.assert(response.status === 400, "Se esperaba HTTP 400");
+    client.assert(response.body.code === "INVALID_REQUEST", "Código inesperado");
+    client.assert(response.body.message === "The request is malformed", "Mensaje inesperado");
+  });
+%}
+
+
+### ============================================================================
+### 3. Flujos E2E: los cuatro microservicios activos
+### ============================================================================
+
+### 3A. Éxito: reserva -> pago autorizado -> confirmación -> notificación
+
+# @name e2eSuccessSetStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{happyProduct}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": 10
+}
+
+###
+
+# @name e2eSuccessCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{happyProduct}}",
+      "quantity": 2,
+      "unitPrice": 59.99
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.test("Se crea el pedido E2E satisfactorio", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+    client.assert(Number(response.body.total) === 119.98, "Total inesperado");
+  });
+  client.global.set("e2eSuccessOrderId", response.body.orderId);
+%}
+
+###
+
+# Espera a que Kafka complete el flujo. Si la máquina arranca en frío, vuelva a ejecutar el GET.
+# @name e2eSuccessGetFinalOrder
+< {% await sleep(3000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2eSuccessOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El pedido termina confirmado", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CONFIRMED", "Se esperaba CONFIRMED; vuelva a consultar si el flujo sigue en curso");
+  });
+%}
+
+###
+
+# @name e2eSuccessGetInventory
+GET {{inventoryBaseUrl}}/api/inventory/{{happyProduct}}
+Accept: application/json
+
+> {%
+  client.test("El flujo exitoso conserva la reserva activa", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 8, "Se esperaba stock 8");
+    client.assert(response.body.reservations.some(r => r.orderId === client.global.get("e2eSuccessOrderId") && r.status === "ACTIVE"), "No aparece la reserva activa");
+  });
+%}
+
+
+### 3B. Rechazo de inventario: sin stock -> pedido cancelado -> notificación
+
+# @name e2eNoStockSetStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{noStockProduct}}
+Content-Type: application/json
+
+{
+  "quantity": 0
+}
+
+###
+
+# @name e2eNoStockCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{noStockProduct}}",
+      "quantity": 1,
+      "unitPrice": 25.00
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.global.set("e2eNoStockOrderId", response.body.orderId);
+  client.test("Se crea el pedido sin stock", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+%}
+
+###
+
+# @name e2eNoStockGetFinalOrder
+< {% await sleep(3000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2eNoStockOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El rechazo de inventario cancela el pedido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+
+### 3C. Rechazo conocido de pago: reserva -> rechazo -> liberación -> cancelación
+
+# @name e2ePaymentRejectedSetStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{rejectedPaymentProduct}}
+Content-Type: application/json
+
+{
+  "quantity": 5
+}
+
+###
+
+# @name e2ePaymentRejectedCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{rejectedPaymentProduct}}",
+      "quantity": 2,
+      "unitPrice": 10.00
+    }
+  ],
+  "paymentMethodId": "pm-test-rejected"
+}
+
+> {%
+  client.global.set("e2ePaymentRejectedOrderId", response.body.orderId);
+  client.test("Se crea el pedido para rechazo de pago", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+%}
+
+###
+
+# @name e2ePaymentRejectedGetFinalOrder
+< {% await sleep(4000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2ePaymentRejectedOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El rechazo de pago termina en cancelación", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+###
+
+# @name e2ePaymentRejectedInventoryCompensated
+GET {{inventoryBaseUrl}}/api/inventory/{{rejectedPaymentProduct}}
+Accept: application/json
+
+> {%
+  client.test("La compensación repone las existencias", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 5, "El stock debe volver a 5");
+    client.assert(response.body.reservations.some(r => r.orderId === client.global.get("e2ePaymentRejectedOrderId") && r.status === "RELEASED" && r.releasedAt !== null), "No aparece la reserva liberada");
+  });
+%}
+
+
+### 3D. Método de pago no soportado: rechazo UNSUPPORTED_PAYMENT_METHOD
+
+# @name e2eUnsupportedPaymentSetStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{unsupportedPaymentProduct}}
+Content-Type: application/json
+
+{
+  "quantity": 3
+}
+
+###
+
+# @name e2eUnsupportedPaymentCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{unsupportedPaymentProduct}}",
+      "quantity": 1,
+      "unitPrice": 9.50
+    }
+  ],
+  "paymentMethodId": "pm-not-supported"
+}
+
+> {%
+  client.global.set("e2eUnsupportedPaymentOrderId", response.body.orderId);
+  client.test("Se crea el pedido con método no soportado", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+%}
+
+###
+
+# @name e2eUnsupportedPaymentGetFinalOrder
+< {% await sleep(4000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2eUnsupportedPaymentOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El método no soportado cancela el pedido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+
+### 3E. Fallo técnico del proveedor: el pago queda PENDING y no existe evento de rechazo
+# ADVERTENCIA: pm-test-error provoca una excepción técnica y reintentos del consumidor.
+
+# @name e2ePaymentErrorSetStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{technicalPaymentProduct}}
+Content-Type: application/json
+
+{
+  "quantity": 4
+}
+
+###
+
+# @name e2ePaymentErrorCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{technicalPaymentProduct}}",
+      "quantity": 1,
+      "unitPrice": 7.00
+    }
+  ],
+  "paymentMethodId": "pm-test-error"
+}
+
+> {%
+  client.global.set("e2ePaymentErrorOrderId", response.body.orderId);
+  client.test("Se crea el pedido para el fallo técnico", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+%}
+
+###
+
+# @name e2ePaymentErrorGetPendingOrder
+< {% await sleep(4000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2ePaymentErrorOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El fallo técnico no se convierte en rechazo de negocio", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "PAYMENT_PENDING", "Se esperaba PAYMENT_PENDING");
+  });
+%}
+
+###
+
+# @name e2ePaymentErrorInventoryStillReserved
+GET {{inventoryBaseUrl}}/api/inventory/{{technicalPaymentProduct}}
+Accept: application/json
+
+> {%
+  client.test("El stock sigue reservado tras un fallo técnico", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 3, "Se esperaba stock 3");
+    client.assert(response.body.reservations.some(r => r.orderId === client.global.get("e2ePaymentErrorOrderId") && r.status === "ACTIVE"), "La reserva debería seguir activa");
+  });
+%}
+
+
+### 3F. Reserva multiartículo atómica: libera el primer producto si falla el segundo
+
+# @name e2eRollbackSetFirstStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{rollbackFirstProduct}}
+Content-Type: application/json
+
+{
+  "quantity": 2
+}
+
+###
+
+# No cree {{rollbackMissingProduct}}: su ausencia fuerza INVENTORY_ITEM_NOT_FOUND.
+# @name e2eRollbackCreateOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "{{rollbackFirstProduct}}",
+      "quantity": 2,
+      "unitPrice": 3.00
+    },
+    {
+      "productId": "{{rollbackMissingProduct}}",
+      "quantity": 1,
+      "unitPrice": 4.00
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.global.set("e2eRollbackOrderId", response.body.orderId);
+  client.test("Se crea el pedido multiartículo", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+    client.assert(Number(response.body.total) === 10, "Total inesperado");
+  });
+%}
+
+###
+
+# @name e2eRollbackGetFinalOrder
+< {% await sleep(3000); %}
+GET {{orderBaseUrl}}/api/orders/{{e2eRollbackOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El fallo del segundo artículo cancela el pedido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+###
+
+# @name e2eRollbackFirstStockRestored
+GET {{inventoryBaseUrl}}/api/inventory/{{rollbackFirstProduct}}
+Accept: application/json
+
+> {%
+  client.test("Inventory deshace las reservas parciales", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 2, "El primer producto debe recuperar sus 2 unidades");
+    client.assert(response.body.reservations.some(r => r.orderId === client.global.get("e2eRollbackOrderId") && r.status === "RELEASED"), "La reserva parcial debería figurar liberada");
+  });
+%}
+
+
+### ============================================================================
+### 4. Observador Kafka no intrusivo (REST Proxy v2)
+### ============================================================================
+# Cree el observador antes de publicar mensajes si quiere ver solo una ejecución limpia. El grupo es
+# único y no roba registros a los microservicios. El poll decodifica claves/valores String desde Base64.
+
+# @name kafkaObserverCreate
+< {%
+  const suffix = $random.uuid.replaceAll("-", "");
+  const group = `orderflow-http-${suffix}`;
+  const instance = `observer-${suffix}`;
+  request.variables.set("observerGroup", group);
+  request.variables.set("observerInstance", instance);
+  client.global.set("observerGroup", group);
+  client.global.set("observerInstance", instance);
+%}
+POST {{kafkaRestBaseUrl}}/consumers/{{observerGroup}}
+Content-Type: application/vnd.kafka.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "name": "{{observerInstance}}",
+  "format": "binary",
+  "auto.offset.reset": "earliest",
+  "auto.commit.enable": "false"
+}
+
+> {%
+  client.test("Se crea el observador Kafka", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.base_uri !== undefined, "Falta base_uri");
+  });
+  client.global.set("observerBaseUri", response.body.base_uri);
+%}
+
+###
+
+# @name kafkaObserverSubscribeAllTopics
+POST {{observerBaseUri}}/subscription
+Content-Type: application/vnd.kafka.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "topics": [
+    "{{inventoryCommandsTopic}}",
+    "{{inventoryEventsTopic}}",
+    "{{paymentCommandsTopic}}",
+    "{{paymentEventsTopic}}",
+    "{{orderEventsTopic}}"
+  ]
+}
+
+> {%
+  client.test("El observador queda suscrito", function () {
+    client.assert(response.status === 204, "Se esperaba HTTP 204");
+  });
+%}
+
+###
+
+# Ejecute varias veces: un poll vacío es normal. La salida decodificada aparece en Response Handler.
+# @name kafkaObserverPollAndDecode
+GET {{observerBaseUri}}/records?timeout=5000&max_bytes=1048576
+Accept: application/vnd.kafka.binary.v2+json
+
+> {%
+  client.test("El poll Kafka es válido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(Array.isArray(response.body), "Se esperaba un array de registros");
+  });
+  for (const record of response.body) {
+    const key = record.key === null ? null : atob(record.key);
+    const rawValue = record.value === null ? null : atob(record.value);
+    let value = rawValue;
+    try { value = rawValue === null ? null : JSON.parse(rawValue); } catch (_) { }
+    client.log(JSON.stringify({
+      topic: record.topic,
+      partition: record.partition,
+      offset: record.offset,
+      key: key,
+      value: value
+    }, null, 2));
+  }
+%}
+
+###
+
+# @name kafkaObserverDelete
+DELETE {{observerBaseUri}}
+Content-Type: application/vnd.kafka.v2+json
+Accept: application/vnd.kafka.v2+json
+
+> {%
+  client.test("Se elimina el observador Kafka", function () {
+    client.assert(response.status === 204, "Se esperaba HTTP 204");
+  });
+%}
+
+
+### ============================================================================
+### 5. Inventory por Kafka: todos los comandos y resultados de negocio
+### ============================================================================
+# Requisitos: Inventory y Kafka activos. Detenga Order mientras use UUID sintéticos; de lo contrario,
+# Order recibirá los eventos resultantes para pedidos que no existen en su base de datos. Antes de
+# volver a arrancar Order, descarte el broker de pruebas o ejecute Inventory con
+# INVENTORY_ORDER_EVENTS_TOPIC=manual.inventory.order.events y adapte la variable de topic del archivo.
+# Reinicie la base de Inventory o cambie los UUID/productos si quiere repetir el escenario desde cero.
+
+# @name kafkaInventoryPrepareStock
+PUT {{inventoryBaseUrl}}/api/inventory/{{manualInventoryProduct}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": 5
+}
+
+###
+
+# Produce ReserveInventoryCommand. Resultado esperado en inventory.order.events:
+# InventoryReservedEvent; stock 5 -> 3.
+# @name kafkaInventoryReserve
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-MANUAL-INVENTORY-001", quantity: 2 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta ReserveInventoryCommand", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaInventoryVerifyReserved
+< {% await sleep(1500); %}
+GET {{inventoryBaseUrl}}/api/inventory/{{manualInventoryProduct}}
+Accept: application/json
+
+> {%
+  client.test("Inventory creó la reserva", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 3, "Se esperaba stock 3");
+    client.assert(response.body.reservations.some(r => r.orderId === "71000000-0000-0000-0000-000000000001" && r.quantity === 2 && r.status === "ACTIVE"), "No aparece la reserva activa");
+  });
+%}
+
+###
+
+# Reejecute tras kafkaInventoryReserve. Resultado: vuelve a publicar InventoryReservedEvent, pero no
+# descuenta stock otra vez (idempotencia de negocio por pedido/producto/cantidad).
+# @name kafkaInventoryReserveExactDuplicate
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-MANUAL-INVENTORY-001", quantity: 2 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el duplicado exacto de reserva", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Mismo pedido/producto con otra cantidad. Resultado esperado: InventoryRejectedEvent con
+# ORDER_ALREADY_HAS_RESERVATION; el stock no cambia.
+# @name kafkaInventoryReserveConflictingDuplicate
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-MANUAL-INVENTORY-001", quantity: 1 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el conflicto para que Inventory lo rechace", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Cantidad superior al stock para otro pedido. Resultado: InventoryRejectedEvent/INSUFFICIENT_STOCK.
+# @name kafkaInventoryReserveInsufficientStock
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000003";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-MANUAL-INVENTORY-001", quantity: 999 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el caso de stock insuficiente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Producto no preparado. Resultado: InventoryRejectedEvent/INVENTORY_ITEM_NOT_FOUND.
+# @name kafkaInventoryReserveMissingProduct
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000002";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-KAFKA-MISSING-PRODUCT", quantity: 1 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el caso de producto inexistente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Ejecute tras kafkaInventoryReserve. Resultado: InventoryReleasedEvent; stock 3 -> 5.
+# @name kafkaInventoryRelease
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReleaseInventoryCommand",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: { orderId: orderId }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta ReleaseInventoryCommand", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaInventoryVerifyReleased
+< {% await sleep(1500); %}
+GET {{inventoryBaseUrl}}/api/inventory/{{manualInventoryProduct}}
+Accept: application/json
+
+> {%
+  client.test("Inventory repone las existencias exactamente una vez", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.availableQuantity === 5, "Se esperaba stock 5");
+    client.assert(response.body.reservations.some(r => r.orderId === "71000000-0000-0000-0000-000000000001" && r.status === "RELEASED" && r.releasedAt !== null), "No aparece la reserva liberada");
+  });
+%}
+
+###
+
+# Reejecute después de la liberación. Inventory publica de nuevo InventoryReleasedEvent sin sumar stock.
+# @name kafkaInventoryReleaseDuplicate
+< {%
+  const orderId = "71000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReleaseInventoryCommand",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: { orderId: orderId }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta la liberación idempotente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+
+### ============================================================================
+### 6. Payment por Kafka: todas las variantes del gateway e idempotencia
+### ============================================================================
+# Requisitos: Payment, su PostgreSQL y Kafka activos. Detenga Order mientras utilice estos UUID
+# sintéticos. Antes de volver a arrancarlo, descarte el broker de pruebas o ejecute Payment con
+# PAYMENT_ORDER_EVENTS_TOPIC=manual.payment.order.events y adapte la variable de topic del archivo;
+# Order no conoce esos pedidos y rechazaría los eventos sintéticos.
+# Payment no expone GET: observe payment.order.events con la sección 4 y revise sus logs/base de datos.
+
+# Resultado: PaymentAuthorizedEvent, providerReference=fake-<orderId>, amount=119.98 EUR.
+# @name kafkaPaymentAuthorizeSuccess
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 119.98,
+      currency: "EUR",
+      paymentMethodId: "pm-test-success"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta la autorización satisfactoria", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Ejecute después del éxito. No vuelve a invocar/cobrar en el gateway ni reescribe la DB, pero vuelve
+# a publicar PaymentAuthorizedEvent con el mismo paymentId/providerReference y nueva causalidad.
+# @name kafkaPaymentAuthorizeExactDuplicate
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 119.98,
+      currency: "EUR",
+      paymentMethodId: "pm-test-success"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el duplicado idempotente de pago", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Resultado: PaymentRejectedEvent con PAYMENT_METHOD_REJECTED.
+# @name kafkaPaymentRejectKnownMethod
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000002";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 20.00,
+      currency: "EUR",
+      paymentMethodId: "pm-test-rejected"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el caso de rechazo conocido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Resultado: PaymentRejectedEvent con UNSUPPORTED_PAYMENT_METHOD.
+# @name kafkaPaymentRejectUnsupportedMethod
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000003";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 15.00,
+      currency: "EUR",
+      paymentMethodId: "pm-unknown"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el método no soportado", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Cero es un importe de dominio válido. Resultado: PaymentAuthorizedEvent amount=0.00.
+# @name kafkaPaymentAuthorizeZeroAmount
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000004";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 0,
+      currency: "EUR",
+      paymentMethodId: "pm-test-success"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta el pago de importe cero", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# ADVERTENCIA: EJECUTE AL FINAL. Mismo orderId terminal con importe diferente: Payment detecta
+# PaymentRequestConflictException y no publica evento. No hay DLT/política propia de errores.
+# @name kafkaPaymentConflictingDuplicate
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 120.00,
+      currency: "EUR",
+      paymentMethodId: "pm-test-success"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka escribió el conflicto para que Payment lo detecte", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# ADVERTENCIA: EJECUTE AL FINAL. pm-test-error simula fallo técnico: persiste PENDING, propaga la
+# excepción y NO produce PaymentRejectedEvent. Reenviar exactamente el comando vuelve a fallar.
+# @name kafkaPaymentTechnicalGatewayFailure
+< {%
+  const orderId = "72000000-0000-0000-0000-000000000005";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 11.00,
+      currency: "EUR",
+      paymentMethodId: "pm-test-error"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka escribió el escenario de fallo técnico", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+
+### ============================================================================
+### 7. Order por Kafka: los cinco eventos de entrada y todas sus transiciones
+### ============================================================================
+# Requisitos: Order y Kafka activos; DETENGA Inventory y Payment para evitar que los comandos que
+# publica Order compitan con la inyección manual. Arranque Order con topics de salida desechables
+# (por ejemplo ORDER_INVENTORY_COMMANDS_TOPIC=manual.order.inventory.commands y
+# ORDER_PAYMENT_COMMANDS_TOPIC=manual.order.payment.commands) o elimine el broker antes de reactivar
+# esos servicios: de otro modo consumirán después los comandos pendientes de estos pedidos manuales.
+# Notification puede permanecer activo. Respete estrictamente el orden de cada flujo.
+
+### 7A. InventoryReservedEvent -> AuthorizePaymentCommand -> PaymentAuthorizedEvent -> CONFIRMED
+
+# @name kafkaOrderSuccessPreparePendingOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "HTTP-MANUAL-ORDER-SUCCESS",
+      "quantity": 2,
+      "unitPrice": 30.00
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.test("Se prepara el pedido pendiente de inventario", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+    client.assert(response.body.status === "INVENTORY_RESERVATION_PENDING", "Estado inicial inesperado");
+  });
+  client.global.set("manualSuccessOrderId", response.body.orderId);
+%}
+
+###
+
+# Order solo usa orderId, pero se envía el contrato canónico completo.
+# @name kafkaOrderInjectInventoryReserved
+< {%
+  const orderId = client.global.get("manualSuccessOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderSuccessPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "InventoryReservedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      reservationId: $random.uuid,
+      reservedItems: [{ productId: "HTTP-MANUAL-ORDER-SUCCESS", quantity: 2 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta InventoryReservedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaOrderInjectPaymentAuthorized
+< {%
+  await sleep(1200);
+  const orderId = client.global.get("manualSuccessOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderSuccessPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "PaymentAuthorizedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      paymentId: $random.uuid,
+      providerReference: `manual-${orderId}`,
+      amount: 60.00,
+      currency: "EUR"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta PaymentAuthorizedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaOrderVerifyConfirmed
+< {% await sleep(1500); %}
+GET {{orderBaseUrl}}/api/orders/{{manualSuccessOrderId}}
+Accept: application/json
+
+> {%
+  client.test("Los eventos manuales confirman el pedido", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CONFIRMED", "Se esperaba CONFIRMED");
+  });
+%}
+
+
+### 7B. InventoryRejectedEvent -> CANCELLED
+
+# @name kafkaOrderInventoryRejectPreparePendingOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "HTTP-MANUAL-ORDER-INVENTORY-REJECT",
+      "quantity": 1,
+      "unitPrice": 8.00
+    }
+  ],
+  "paymentMethodId": "pm-test-success"
+}
+
+> {%
+  client.test("Se prepara el pedido que rechazará Inventory", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+  client.global.set("manualInventoryRejectedOrderId", response.body.orderId);
+%}
+
+###
+
+# @name kafkaOrderInjectInventoryRejected
+< {%
+  const orderId = client.global.get("manualInventoryRejectedOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderInventoryRejectPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "InventoryRejectedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      reason: "INSUFFICIENT_STOCK"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta InventoryRejectedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaOrderVerifyInventoryRejectedCancellation
+< {% await sleep(1500); %}
+GET {{orderBaseUrl}}/api/orders/{{manualInventoryRejectedOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El rechazo de inventario cancela inmediatamente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+
+### 7C. InventoryReservedEvent -> PaymentRejectedEvent -> InventoryReleasedEvent -> CANCELLED
+
+# @name kafkaOrderPaymentRejectPreparePendingOrder
+POST {{orderBaseUrl}}/api/orders
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customerId": "{{$uuid}}",
+  "items": [
+    {
+      "productId": "HTTP-MANUAL-ORDER-PAYMENT-REJECT",
+      "quantity": 1,
+      "unitPrice": 13.00
+    }
+  ],
+  "paymentMethodId": "pm-test-rejected"
+}
+
+> {%
+  client.test("Se prepara el pedido para compensación", function () {
+    client.assert(response.status === 201, "Se esperaba HTTP 201");
+  });
+  client.global.set("manualPaymentRejectedOrderId", response.body.orderId);
+%}
+
+###
+
+# @name kafkaOrderPaymentRejectInjectInventoryReserved
+< {%
+  const orderId = client.global.get("manualPaymentRejectedOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderPaymentRejectPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "InventoryReservedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      reservationId: $random.uuid,
+      reservedItems: [{ productId: "HTTP-MANUAL-ORDER-PAYMENT-REJECT", quantity: 1 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta la reserva previa a pago", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaOrderInjectPaymentRejected
+< {%
+  await sleep(1200);
+  const orderId = client.global.get("manualPaymentRejectedOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderPaymentRejectPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "PaymentRejectedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      paymentId: $random.uuid,
+      reason: "PAYMENT_METHOD_REJECTED"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta PaymentRejectedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Comprueba el estado intermedio antes de confirmar la liberación.
+# @name kafkaOrderVerifyCancellationPending
+< {% await sleep(1200); %}
+GET {{orderBaseUrl}}/api/orders/{{manualPaymentRejectedOrderId}}
+Accept: application/json
+
+> {%
+  client.test("El rechazo de pago inicia la compensación", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLATION_PENDING", "Se esperaba CANCELLATION_PENDING");
+  });
+%}
+
+###
+
+# @name kafkaOrderInjectInventoryReleased
+< {%
+  const orderId = client.global.get("manualPaymentRejectedOrderId");
+  if (!orderId) throw new Error("Ejecute kafkaOrderPaymentRejectPreparePendingOrder primero");
+  const value = {
+    messageId: $random.uuid,
+    messageType: "InventoryReleasedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      reservationId: $random.uuid
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta InventoryReleasedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaOrderVerifyCancelledAfterRelease
+< {% await sleep(1500); %}
+GET {{orderBaseUrl}}/api/orders/{{manualPaymentRejectedOrderId}}
+Accept: application/json
+
+> {%
+  client.test("La liberación completa la cancelación", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.status === "CANCELLED", "Se esperaba CANCELLED");
+  });
+%}
+
+
+### ============================================================================
+### 8. Notification por Kafka: los dos eventos admitidos
+### ============================================================================
+# Notification no tiene HTTP ni persistencia. Verifique en sus logs:
+#   Fake email delivered: recipient=<customerId>@orderflow.invalid, type=ORDER_CONFIRMED|ORDER_CANCELLED, ...
+# Reenviar un evento vuelve a notificar: no existe deduplicación por messageId.
+
+# @name kafkaNotificationOrderConfirmed
+< {%
+  const orderId = "73000000-0000-0000-0000-000000000001";
+  const customerId = "74000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "OrderConfirmedEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      customerId: customerId,
+      total: 119.98,
+      currency: "EUR"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{orderEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta OrderConfirmedEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# @name kafkaNotificationOrderCancelled
+< {%
+  const orderId = "73000000-0000-0000-0000-000000000001";
+  const customerId = "74000000-0000-0000-0000-000000000001";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "OrderCancelledEvent",
+    correlationId: orderId,
+    causationId: $random.uuid,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      customerId: customerId,
+      reason: "PAYMENT_REJECTED"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{orderEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka acepta OrderCancelledEvent", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+
+### ============================================================================
+### 9. Contratos Kafka inválidos / mensajes venenosos - EJECUTAR SIEMPRE AL FINAL
+### ============================================================================
+# El proyecto no tiene DLT, retry topics ni deduplicación genérica. Estos registros están diseñados
+# para hacer fallar listeners y pueden reintentarse o bloquear el avance de su partición/grupo.
+# Use una base/broker desechable o topics/grupos sobrescritos para pruebas negativas aisladas.
+#
+# Mutaciones que todos los listeners rechazan y que puede aplicar a los cuerpos siguientes:
+#   - messageId/correlationId/aggregateId/causationId no UUID
+#   - ausencia del campo causationId (null sí es válido)
+#   - occurredAt no parseable como Instant
+#   - version distinta de 1
+#   - messageType no soportado por ese topic
+#   - payload ausente/no objeto
+#   - aggregateId o correlationId distintos de payload.orderId
+#
+# Inventory además rechaza items vacío, productId vacío y quantity <= 0.
+# Payment además rechaza amount negativo o con más de 2 decimales exactos, currency != EUR y
+# paymentMethodId vacío. Notification exige payload.customerId UUID.
+
+# JSON truncado: Payment registra "Malformed Kafka JSON" y no produce ningún evento.
+# @name kafkaDangerMalformedPaymentJson
+< {%
+  request.variables.set("recordKey64", btoa("99000000-0000-0000-0000-000000000001"));
+  request.variables.set("recordValue64", btoa('{"messageId":'));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka almacena el JSON venenoso", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200 del proxy");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Versión no soportada: Inventory registra "Unsupported contract version".
+# @name kafkaDangerUnsupportedInventoryVersion
+< {%
+  const orderId = "99000000-0000-0000-0000-000000000002";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "ReserveInventoryCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 2,
+    payload: {
+      orderId: orderId,
+      items: [{ productId: "HTTP-INVALID-VERSION", quantity: 1 }]
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{inventoryCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka almacena la versión inválida", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200 del proxy");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Correlación incoherente: Notification registra "correlationId must equal payload.orderId".
+# @name kafkaDangerNotificationCorrelationMismatch
+< {%
+  const orderId = "99000000-0000-0000-0000-000000000003";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "OrderConfirmedEvent",
+    correlationId: "99000000-0000-0000-0000-000000000099",
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      customerId: "99000000-0000-0000-0000-000000000004",
+      total: 1.00,
+      currency: "EUR"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{orderEventsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka almacena el evento incoherente", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200 del proxy");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+###
+
+# Payload Payment no válido: USD no está soportado; no se publica resultado.
+# Cambie currency por EUR y amount por -1 o 10.001 para probar el resto de invariantes monetarias.
+# @name kafkaDangerPaymentUnsupportedCurrency
+< {%
+  const orderId = "99000000-0000-0000-0000-000000000005";
+  const value = {
+    messageId: $random.uuid,
+    messageType: "AuthorizePaymentCommand",
+    correlationId: orderId,
+    causationId: null,
+    aggregateId: orderId,
+    occurredAt: $isoTimestamp,
+    version: 1,
+    payload: {
+      orderId: orderId,
+      amount: 10.00,
+      currency: "USD",
+      paymentMethodId: "pm-test-success"
+    }
+  };
+  request.variables.set("recordKey64", btoa(orderId));
+  request.variables.set("recordValue64", btoa(JSON.stringify(value)));
+%}
+POST {{kafkaRestBaseUrl}}/topics/{{paymentCommandsTopic}}
+Content-Type: application/vnd.kafka.binary.v2+json
+Accept: application/vnd.kafka.v2+json
+
+{
+  "records": [
+    { "key": "{{recordKey64}}", "value": "{{recordValue64}}" }
+  ]
+}
+
+> {%
+  client.test("Kafka almacena el pago en moneda inválida", function () {
+    client.assert(response.status === 200, "Se esperaba HTTP 200 del proxy");
+    client.assert(response.body.offsets[0].error_code === null, "Kafka no escribió el registro");
+  });
+%}
+
+
+### ============================================================================
+### 10. Catálogo cubierto
+### ============================================================================
+# Endpoints HTTP: 4/4.
+# Mensajes Kafka: 10/10.
+#   ReserveInventoryCommand, ReleaseInventoryCommand,
+#   InventoryReservedEvent, InventoryRejectedEvent, InventoryReleasedEvent,
+#   AuthorizePaymentCommand, PaymentAuthorizedEvent, PaymentRejectedEvent,
+#   OrderConfirmedEvent, OrderCancelledEvent.
+#
+# Los fixtures de referencia del repositorio están en docs/messaging/contracts/*.json.

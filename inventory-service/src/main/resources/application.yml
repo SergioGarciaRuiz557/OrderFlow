@@ -1,4 +1,8 @@
 spring:
+  docker:
+    compose:
+      # El Compose raíz gestiona la infraestructura compartida de forma explícita.
+      enabled: false
   application:
     # Nombre lógico del servicio expuesto mediante el entorno de aplicación de Spring.
     name: inventory-service

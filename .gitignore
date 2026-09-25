@@ -7,4 +7,5 @@ build/
 *.iml
 .vscode/
 *.log
+.env
 

@@ -5,7 +5,7 @@ spring:
   # La conexión local explícita mantiene este servicio independiente del descubrimiento automático de Docker Compose.
   # Las variables de entorno permiten que las plataformas de despliegue proporcionen credenciales administradas de PostgreSQL.
   datasource:
-    url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5433/orderflow_orders}
+    url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5432/orderflow_orders}
     username: ${ORDER_DB_USERNAME:orderflow}
     password: ${ORDER_DB_PASSWORD:orderflow}
   jpa:

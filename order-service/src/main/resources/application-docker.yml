@@ -1,0 +1,5 @@
+spring:
+  datasource:
+    url: ${ORDER_DB_URL:jdbc:postgresql://postgres:5432/orderflow_orders}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}

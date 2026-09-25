@@ -119,7 +119,12 @@ Debe proporcionarse una base de datos PostgreSQL. Estos valores predeterminados 
 | `ORDER_DB_PASSWORD` | `orderflow` |
 | `ORDER_SERVICE_PORT` | `8081` |
 
-Para el desarrollo local, `order-service/compose.yaml` define el servicio `order-postgres` con una
+Para usar el servidor compartido, ejecute desde la raíz `docker compose up -d --build order-service`.
+Si ejecuta Order desde el IDE, levante `postgres kafka` desde la raíz y configure
+`ORDER_DB_URL=jdbc:postgresql://localhost:5432/orderflow_orders`. Consulte la
+[guía de ejecución local](../README.md#ejecución-local).
+
+Como alternativa aislada, `order-service/compose.yaml` define el servicio `order-postgres` con una
 comprobación de estado. Los archivos de la base de datos sobreviven al reemplazo del contenedor en el volumen con nombre
 `order-postgres-data`. En el anfitrión se utiliza el puerto `5433` para que el PostgreSQL de Inventory pueda seguir utilizando el `5432`.
 

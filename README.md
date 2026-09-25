@@ -592,47 +592,107 @@ dominio, aplicación y compatibilidad de contratos continúan ejecutándose.
 
 ## Ejecución local
 
-El [`compose.yaml`](compose.yaml) de la raíz incluye un broker `apache/kafka-native:3.8.0` de un solo
-nodo, ejecutado en modo KRaft y sin ZooKeeper. Expone `localhost:9092` para los microservicios
-arrancados desde el host/IDE, utiliza `kafka:29092` como listener interno, persiste los datos en el
-volumen `kafka-data` y publica una comprobación de estado basada en `kafka-topics.sh`.
+El [`compose.yaml`](compose.yaml) de la raíz gestiona los cuatro microservicios, un único servidor
+PostgreSQL 17 y Kafka 3.8.0 en modo KRaft, sin ZooKeeper. Requiere Docker con Compose v2 o posterior;
+las imágenes compilan cada aplicación con su Gradle Wrapper y Java 21, sin necesitar un JDK local.
+La primera compilación necesita acceso a los repositorios de imágenes y dependencias.
 
-Inicie únicamente Kafka desde la raíz con:
+Cada servicio declara `build: <directorio-del-servicio>` y contiene su propio `Dockerfile` y
+`.dockerignore`. Compose activa `SPRING_PROFILES_ACTIVE=docker`; el archivo
+`src/main/resources/application-docker.yml` de cada servicio configura las direcciones internas de
+PostgreSQL y Kafka. El archivo `application.yml` mantiene la configuración para ejecutar desde el IDE.
+Las dependencias se declaran directamente en cada servicio mediante `depends_on`, sin anclas YAML.
+
+Cada microservicio tiene un límite de memoria de `350m`; PostgreSQL, `512m`; y Kafka, `1024m`.
+Las JVM de las aplicaciones reservan como máximo el 50 % del límite para el heap, dejando espacio
+para el resto del proceso. Kafka utiliza un heap de hasta `512m`.
+
+Ejecute estos comandos **desde la raíz**:
 
 ```shell
+# Todos los microservicios, PostgreSQL y Kafka
+docker compose up -d --build
+
+# Solo los servidores, para desarrollar desde el IDE
+docker compose up -d --wait postgres kafka
+
+# Un microservicio y sus dependencias
+docker compose up -d --build order-service
+
+# Cualquier combinación de microservicios y sus dependencias
+docker compose up -d --build inventory-service payment-service
+
+# También se puede arrancar cada servidor por separado
+docker compose up -d --wait postgres
 docker compose up -d --wait kafka
 ```
 
-Cada servicio con persistencia sigue necesitando su PostgreSQL correspondiente. Puede arrancar la
-base de datos desde el Compose propio del servicio y después ejecutar la aplicación. El valor por
-defecto del broker ya coincide con el puerto publicado por el Compose raíz.
+Los servicios seleccionados esperan a que sus servidores estén saludables mediante
+[`depends_on`](https://docs.docker.com/compose/how-tos/startup-order/). Ningún microservicio depende
+del arranque de otro: Order, Inventory y Payment necesitan PostgreSQL y Kafka; Notification solo
+necesita Kafka. Para completar un pedido de extremo a extremo sí deben estar funcionando los cuatro.
+Seleccionar servicios no detiene los que ya estuvieran ejecutándose. Para cambiar de una ejecución
+completa a una parcial, ejecute primero `docker compose down` (conserva los datos).
 
-Variables comunes disponibles en [`.env.example`](.env.example):
+| Microservicio | Base de datos propia | Usuario / contraseña local | Acceso HTTP |
+| --- | --- | --- | --- |
+| Order | `orderflow_orders` | `orderflow` / `orderflow` | `http://localhost:8081` |
+| Inventory | `inventory` | `inventory` / `inventory` | `http://localhost:8080` |
+| Payment | `payment` | `payment` / `payment` | No expone HTTP |
+| Notification | `notification` | `notification` / `notification` | No expone HTTP |
 
-```dotenv
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-ORDER_INVENTORY_COMMANDS_TOPIC=order.inventory.commands
-INVENTORY_ORDER_EVENTS_TOPIC=inventory.order.events
-ORDER_PAYMENT_COMMANDS_TOPIC=order.payment.commands
-PAYMENT_ORDER_EVENTS_TOPIC=payment.order.events
-ORDER_EVENTS_TOPIC=order.events
-```
+[`docker/postgres/init.sql`](docker/postgres/init.sql) crea las cuatro bases de datos y sus usuarios
+al inicializar un volumen vacío. Cada usuario de aplicación tiene acceso únicamente a su base de
+datos. Notification todavía no tiene adaptador de persistencia; su base de datos queda reservada.
+Flyway ejecuta las migraciones propias de los otros tres servicios cuando arrancan.
 
-Variables adicionales útiles:
+PostgreSQL publica `localhost:5432`; dentro de Docker se utiliza `postgres:5432`. Kafka publica
+`localhost:9092` para el host/IDE y anuncia `kafka:29092` a los contenedores. La imagen JVM
+`apache/kafka:3.8.0` incluye la CLI utilizada por su comprobación de salud.
+Los volúmenes `postgres-data` y `kafka-data` conservan los datos entre arranques.
 
-```dotenv
-KAFKA_ENABLED=true
-INVENTORY_COMMANDS_GROUP=inventory-service.commands
-PAYMENT_COMMANDS_GROUP=payment-service.commands
-ORDER_INVENTORY_EVENTS_GROUP=order-service.inventory-events
-ORDER_PAYMENT_EVENTS_GROUP=order-service.payment-events
-NOTIFICATION_ORDER_EVENTS_GROUP=notification-service.order-events
-```
+Para conectar Kafka IO desde este mismo ordenador, configure el bootstrap server como
+`localhost:9092` (o el valor de `KAFKA_PORT`), protocolo `PLAINTEXT`, sin SASL ni SSL.
+`KAFKA_LISTENERS` escucha explícitamente en `0.0.0.0` dentro del contenedor, mientras que
+`KAFKA_ADVERTISED_LISTENERS` anuncia `localhost` al cliente del host y `kafka` al cliente interno.
+`0.0.0.0` es la dirección de escucha, no la dirección que debe introducirse en Kafka IO.
+Este esquema de dos listeners permite acceder desde el host y desde Docker al mismo broker;
+consulte la [guía oficial de Docker para Kafka](https://docs.docker.com/guides/kafka/).
+Después de modificar los listeners, aplique la configuración con
+`docker compose up -d --wait kafka` (un simple `restart` no actualiza las variables del contenedor).
 
-Con el broker y las bases de datos disponibles, cada servicio puede iniciarse desde su directorio:
+Puede copiar [`.env.example`](.env.example) a `.env` para cambiar los puertos publicados, la
+contraseña del administrador PostgreSQL o los nombres de topics. Las credenciales de los usuarios
+de aplicación son las de la tabla y están destinadas al desarrollo local. Cambiar el script de
+inicialización o la contraseña del administrador no modifica un volumen ya inicializado.
+
+Para ejecutar aplicaciones desde el IDE, arranque solo `postgres kafka` y configure las variables
+en el proceso de cada aplicación: Spring Boot no carga automáticamente el archivo `.env`.
+Inventory y Payment ya utilizan sus bases de datos en `localhost:5432`; Order necesita
+`ORDER_DB_URL=jdbc:postgresql://localhost:5432/orderflow_orders` porque su configuración histórica
+usa el puerto `5433`. Kafka ya tiene `localhost:9092` como valor predeterminado. Si cambia puertos
+en `.env`, adapte también las URL del IDE. Inventory tiene desactivada la gestión automática de
+Compose para que ejecutar o detener una aplicación no controle la infraestructura compartida.
+
+Con esas variables, ejecute `./gradlew bootRun` desde el directorio del microservicio
+(`.\gradlew.bat bootRun` en PowerShell). Los antiguos Compose de Order e Inventory son alternativas
+aisladas; no deben combinarse con el Compose raíz. El proyecto raíz se llama ahora `orderflow`:
+si tenía el antiguo PostgreSQL de Inventory activo, deténgalo antes para liberar el puerto `5432`.
+Los volúmenes antiguos se conservan, pero sus datos no se migran automáticamente al servidor común.
 
 ```shell
-./gradlew bootRun
+# Estado y registros
+docker compose ps
+docker compose logs -f order-service
+
+# Detener solo una aplicación, manteniendo la infraestructura
+docker compose stop order-service
+
+# Detener todo conservando los datos
+docker compose down
+
+# Puente HTTP opcional para las pruebas manuales de orderflow.http
+docker compose --profile manual-testing up -d --wait kafka-rest
 ```
 
 Para inspección manual puede utilizarse cualquier cliente Kafka estándar y mostrar tanto la clave como

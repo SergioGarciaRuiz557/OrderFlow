@@ -41,8 +41,7 @@ dependencies {
     // El controlador JDBC solo es necesario cuando la aplicación se conecta a PostgreSQL durante la ejecución.
     runtimeOnly("org.postgresql:postgresql")
 
-    // Durante el desarrollo local, Spring Boot inicia el servicio PostgreSQL declarado en compose.yaml
-    // antes de crear el contexto de aplicación y lo detiene cuando finaliza la aplicación.
+    // Integración opcional; desactivada por defecto para gestionar la infraestructura desde el Compose raíz.
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
 
     // JUnit 5, utilidades de prueba de Spring, aserciones de Kotlin y simulación de puertos compatible con Kotlin.

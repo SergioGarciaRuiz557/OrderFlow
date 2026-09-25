@@ -62,7 +62,7 @@ GET /api/inventory/{productId}
 
 ## Ejecución
 
-La ejecución local requiere Docker. Spring Boot usa `inventory-service/compose.yaml` para iniciar PostgreSQL automáticamente antes de crear el contexto de la aplicación y detiene el contenedor cuando finaliza la aplicación. El archivo `compose.yaml` de la raíz incluye ese archivo, por lo que el descubrimiento también funciona cuando un IDE inicia el servicio con la raíz del repositorio como directorio de trabajo. La base de datos se conserva en el volumen de Docker `inventory-postgres-data`.
+La ejecución local requiere Docker. Desde la raíz, ejecute `docker compose up -d --wait postgres kafka` para iniciar la infraestructura compartida y después arranque Inventory desde el IDE o Gradle. La gestión automática de Compose en Spring Boot está desactivada para evitar que una aplicación controle los servidores de los demás servicios. También puede ejecutar `docker compose up -d --build inventory-service` desde la raíz para arrancar Inventory y sus dependencias en contenedores. Consulte la [guía de ejecución local](../README.md#ejecución-local). El Compose de este directorio queda como alternativa aislada y no debe arrancarse junto al de la raíz.
 
 La conexión predeterminada es `jdbc:postgresql://localhost:5432/inventory`, con nombre de usuario y contraseña `inventory`. Se puede sustituir mediante `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` al conectarse a una base de datos administrada externamente.
 
